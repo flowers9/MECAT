@@ -19,8 +19,9 @@ SOURCES  := main.cpp \
 
 SRC_INCDIRS  := . libboost
 
-TGT_LDFLAGS := -L${TARGET_DIR}
-TGT_LDLIBS  := -lmecat
-TGT_PREREQS := libmecat.a
+TGT_CXXFLAGS := -D _FILE_OFFSET_BITS=64
+TGT_LDFLAGS  := -L${TARGET_DIR}
+TGT_LDLIBS   := -lmecat
+TGT_PREREQS  := libmecat.a
 
 SUBMAKEFILES :=

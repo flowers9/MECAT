@@ -25,28 +25,18 @@ public:
 		idx_t bytes = (max_db_size / 4);
 		safe_calloc(pac, u1_t, bytes);
 	}
-	
-	void GetSequence(const index_t id, const bool fwd, char* seq, const index_t size_in_ovlp)
-	{
-		const index_t offset = seq_idx[id].offset;
-		const index_t size = seq_idx[id].size;
-		r_assert(size == size_in_ovlp);
-		index_t idx = 0;
-		if (fwd)
-		{
-			for (index_t i = 0; i < size; ++i)
-			{
-				uint1 c = get_char(offset + i);
-				seq[idx++] = c;
+
+	void GetSequence(const idx_t id, const bool fwd, char* const seq, const idx_t size) {
+		r_assert(size == seq_idx[id].size);
+		if (fwd) {
+			const idx_t offset(seq_idx[id].offset);
+			for (idx_t i(0); i < size; ++i) {
+				seq[i] = get_char(offset + i);
 			}
-		}
-		else
-		{
-			for (index_t i = size - 1; i >= 0; --i)
-			{
-				uint1 c = get_char(offset + i);
-				c = 3 - c;
-				seq[idx++] = c;
+		} else {
+			const idx_t offset(seq_idx[id].offset + size - 1);
+			for (idx_t i(0); i < size; ++i) {
+				seq[i] = 3 - get_char(offset - i);
 			}
 		}
 	}

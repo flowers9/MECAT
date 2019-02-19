@@ -1,6 +1,6 @@
 #include "reads_correction_aux.h"
 
-void normalize_gaps(const char* qstr, const char* tstr, const index_t aln_size, std::string& qnorm, std::string& tnorm, const bool push)
+void normalize_gaps(const char* qstr, const char* tstr, const idx_t aln_size, std::string& qnorm, std::string& tnorm, const bool push)
 {
     qnorm.clear();
     tnorm.clear();
@@ -8,7 +8,7 @@ void normalize_gaps(const char* qstr, const char* tstr, const index_t aln_size, 
 
 #ifndef NDEBUG
     int qcnt = 0, tcnt = 0;
-    for (index_t i = 0; i < aln_size; ++i)
+    for (idx_t i = 0; i < aln_size; ++i)
     {
         const char qc = qstr[i];
         const char tc = tstr[i];
@@ -18,7 +18,7 @@ void normalize_gaps(const char* qstr, const char* tstr, const index_t aln_size, 
 #endif
 
     // convert mismatches to indels
-    for (index_t i = 0; i < aln_size; ++i)
+    for (idx_t i = 0; i < aln_size; ++i)
     {
         const char qc = qstr[i];
         const char tc = tstr[i];
@@ -31,14 +31,14 @@ void normalize_gaps(const char* qstr, const char* tstr, const index_t aln_size, 
     // push gaps to the right, but not pass the end
     if (push)
     {
-        index_t qlen = qnorm.size();
-        index_t tlen = tnorm.size();
-        for (index_t i = 0; i < qlen - 1; ++i)
+        idx_t qlen = qnorm.size();
+        idx_t tlen = tnorm.size();
+        for (idx_t i = 0; i < qlen - 1; ++i)
         {
             // push target gaps
             if (tnorm[i] == kGap)
             {
-                index_t j = i;
+                idx_t j = i;
                 while (1)
                 {
                     const char c = tnorm[++j];
@@ -52,7 +52,7 @@ void normalize_gaps(const char* qstr, const char* tstr, const index_t aln_size, 
             // push query gaps
             if (qnorm[i] == kGap)
             {
-                index_t j = i;
+                idx_t j = i;
                 while (1)
                 {
                     const char c = qnorm[++j];
@@ -78,38 +78,19 @@ void normalize_gaps(const char* qstr, const char* tstr, const index_t aln_size, 
 #endif
 }
 
-struct CmpExtensionCandidateBySid
-{
-	bool operator()(const ExtensionCandidate& a, const ExtensionCandidate& b)
-	{
-		return a.sid < b.sid;
-	}
-};
-
-void
-build_cns_thrd_data_can(ExtensionCandidate* ec_list, 
-						const int nec,
-						const idx_t min_rid,
-						const idx_t max_rid,
-						ReadsCorrectionOptions* prco,
-						PackedDB* reads,
-						std::ostream* out,
-					    ConsensusThreadData** ppctd)
-{
-	const index_t num_reads = max_rid - min_rid + 1;
-	const int num_threads = prco->num_threads;
-    const index_t num_reads_per_thread = (num_reads + num_threads - 1) / num_threads;
-	std::sort(ec_list, ec_list + nec, CmpExtensionCandidateBySid());
-	idx_t max_id = min_rid;
-	idx_t i = 0, j;
-	int tid = 0;
-	while (i < nec)
-	{
-		max_id += num_reads_per_thread;
-		j = i + 1;
-		while (j < nec && ec_list[j].sid < max_id) ++j;
-		ppctd[tid] = new ConsensusThreadData(prco, tid, reads, ec_list + i, j - i, out);
-		++tid;
-		i = j;
+void allocate_ecs(ConsensusThreadData& data, ExtensionCandidate* const ec_list, const idx_t nec) {
+	const int n(data.rco.num_threads);
+	// split by number of ec's, rather than reads, since reads ids are not
+	// necessarily contiguous and we could get empty lists
+	for (idx_t i(0), k(0); k < n; ++k) {
+		const idx_t start(i);
+		// drop fractions here, as we'll likely add a few more ec's below
+		i += (nec - i) / (n - k);
+		if (i < nec) {			// include all ec's for the last read
+			const int final_sid(ec_list[i].sid);
+			for (++i; i < nec && ec_list[i].sid == final_sid; ++i) { }
+		}
+		data.data[k].num_candidates = i - start;
+		data.data[k].candidates = ec_list + start;
 	}
 }

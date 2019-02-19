@@ -24,7 +24,7 @@ typedef struct {
 } volume_t;
 
 volume_t*
-new_volume_t(int num_reads, int num_bases);
+new_volume_t(int num_reads, int num_bases, int no_allocate = 0);
 
 void
 clear_volume_t(volume_t* v);
@@ -66,6 +66,9 @@ get_read_id_from_offset_list(offset_list_t* list, const int offset);
 volume_t*
 load_volume(const char* vol_name);
 
+volume_t*
+load_volume_header(const char* vol_name);
+
 void
 generate_vol_file_name(const char* wrk_dir, int vol, char* vol_file_name);
 
@@ -76,7 +79,7 @@ void
 split_dataset(const char* reads, const char* wrk_dir, int* num_vols);
 
 void
-extract_one_seq(volume_t* v, const int id, char* s);
+extract_one_seq(const volume_t* v, const int id, char* s);
 
 int
 split_raw_dataset(const char* reads, const char* wrk_dir);

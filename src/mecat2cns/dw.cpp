@@ -375,181 +375,159 @@ void dw_in_one_direction(const char* query, const int query_size, const char* ta
     }
 }
 
-int  dw(const char* query, const int query_size, const int query_start,
-        const char* target, const int target_size, const int target_start,
-        int* U, int* V, Alignment* align, DPathData2* d_path, 
-        PathPoint* aln_path, OutputStore* result, SW_Parameters* swp,
-	    double error_rate, const int min_aln_size)
-{
-    result->init();
-    align->init();
-    // left extend
-    dw_in_one_direction(query + query_start - 1, query_start,
-						target + target_start - 1, target_start,
-						U, V, align, d_path, aln_path, swp, result, 
-						0, error_rate);
-    align->init();
-    // right extend
-    dw_in_one_direction(query + query_start, query_size - query_start,
-						target + target_start, target_size - target_start,
-						U, V, align, d_path, aln_path, swp, result, 
-						1, error_rate);
-
-    // merge the results
-    int i, j, k, idx = 0;
-    const char* encode2char = "ACGT-";
-    for (k = result->left_store_size - 1, i = 0, j = 0; k > - 1; --k, ++idx)
-    {
-		unsigned char ch = result->left_store1[k];
+int dw(const char* query, const int query_size, const int query_start, const char* target, const int target_size, const int target_start, int* U, int* V, Alignment* align, DPathData2* d_path, PathPoint* aln_path, OutputStore* result, SW_Parameters* swp, double error_rate, const int min_aln_size) {
+	result->init();
+	align->init();
+	// left extend
+	dw_in_one_direction(query + query_start - 1, query_start, target + target_start - 1, target_start, U, V, align, d_path, aln_path, swp, result, 0, error_rate);
+	align->init();
+	// right extend
+	dw_in_one_direction(query + query_start, query_size - query_start, target + target_start, target_size - target_start, U, V, align, d_path, aln_path, swp, result, 1, error_rate);
+	// merge the results
+	int i, j, k, idx = 0;
+	const char* encode2char("ACGT-");
+	for (k = result->left_store_size - 1, i = 0, j = 0; -1 < k; --k, ++idx) {
+		unsigned char ch(result->left_store1[k]);
 		r_assert(ch >= 0 && ch <= 4);
 		ch = encode2char[ch];
 		result->out_store1[idx] = ch;
-		if (ch != '-') ++i;
-		
+		if (ch != '-') {
+			++i;
+		}
 		ch = result->left_store2[k];
 		r_assert(ch >= 0 && ch <= 4);
 		ch = encode2char[ch];
 		result->out_store2[idx] = ch;
-		if (ch != '-')++j;
-    }
-    result->query_start = query_start - i;
-	if (result->query_start < 0)
-	{
+		if (ch != '-') {
+			++j;
+		}
+	}
+	result->query_start = query_start - i;
+	if (result->query_start < 0) {
 		std::cerr << "query_start = " << query_start << ", i = " << i << "\n";
 	}
 	r_assert(result->query_start >= 0);
-    result->target_start = target_start - j;
+	result->target_start = target_start - j;
 	r_assert(result->target_start >= 0);
-    for (k = 0, i = 0, j = 0; k < result->right_store_size; ++k, ++idx)
-    {
-
-		unsigned char ch = result->right_store1[k];
+	for (k = 0, i = 0, j = 0; k < result->right_store_size; ++k, ++idx) {
+		unsigned char ch(result->right_store1[k]);
 		r_assert(ch >= 0 && ch <= 4);
 		ch = encode2char[ch];
 		result->out_store1[idx] = ch;
-		if (ch != '-') ++i;
-		
+		if (ch != '-') {
+			++i;
+		}
 		ch = result->right_store2[k];
 		r_assert(ch >= 0 && ch <= 4);
 		ch = encode2char[ch];
 		result->out_store2[idx] = ch;
-		if (ch != '-') ++j;
-    }
-    result->out_store_size = idx;
-    result->query_end = query_start + i;
-    result->target_end = target_start + j;
-
-	if (result->out_store_size >= min_aln_size)
-    {
-        int mat = 0, mis = 0, ins = 0, del = 0;
-        for (j = 0; j < result->out_store_size; ++j)
-        {
-            if (result->out_store1[j] == result->out_store2[j])
-            {
-                ++mat;
-                result->out_match_pattern[j] = '|';
-            }
-            else if (result->out_store1[j] == '-')
-            {
-                ++ins;
-                result->out_match_pattern[j] = '*';
-            }
-            else if (result->out_store2[j] == '-')
-            {
-                ++del;
-                result->out_match_pattern[j] = '*';
-            }
-            else
-            {
-                ++mis;
-                result->out_match_pattern[j] = '*';
-            }
-        }
-        result->out_store1[result->out_store_size] = '\0';
-        result->out_store2[result->out_store_size] = '\0';
-        result->out_match_pattern[result->out_store_size] = '\0';
-        result->mat = mat;
-        result->mis = mis;
-        result->ins = ins;
-        result->del = del;
-        result->ident = 100.0 * mat / result->out_store_size;
-
-        return 1;
-    }
-    return 0;
+		if (ch != '-') {
+			++j;
+		}
+	}
+	result->out_store_size = idx;
+	result->query_end = query_start + i;
+	result->target_end = target_start + j;
+	if (result->out_store_size < min_aln_size) {
+		return 0;
+	}
+	int mat(0), mis(0), ins(0), del(0);
+	for (j = 0; j < result->out_store_size; ++j) {
+		if (result->out_store1[j] == result->out_store2[j]) {
+			++mat;
+			result->out_match_pattern[j] = '|';
+		} else if (result->out_store1[j] == '-') {
+			++ins;
+			result->out_match_pattern[j] = '*';
+		} else if (result->out_store2[j] == '-') {
+			++del;
+			result->out_match_pattern[j] = '*';
+		} else {
+			++mis;
+			result->out_match_pattern[j] = '*';
+		}
+	}
+	result->out_store1[result->out_store_size] = 0;
+	result->out_store2[result->out_store_size] = 0;
+	result->out_match_pattern[result->out_store_size] = 0;
+	result->mat = mat;
+	result->mis = mis;
+	result->ins = ins;
+	result->del = del;
+	result->ident = double(100) * mat / result->out_store_size;
+	return 1;
 }
 
-bool GetAlignment(const char* query, const int query_start, const int query_size,
-				  const char* target, const int target_start, const int target_size,
-				  DiffRunningData* drd, M5Record& m5, double error_rate,
-				  const int min_aln_size)
-{
-	int flag = dw(query, query_size, query_start,
-				  target, target_size, target_start,
-				  drd->DynQ, drd->DynT, 
-				  drd->align, drd->d_path,
-				  drd->aln_path, drd->result,
-				  &drd->swp, error_rate, min_aln_size);
-	if (!flag) return false;
-	
-	int qrb = 0, qre = 0;
-	int trb = 0, tre = 0;
-	int eit = 0, k = 0;
-	const int consecutive_match_region_size = 4;
-	for (k = 0; k < drd->result->out_store_size && eit < consecutive_match_region_size; ++k)
-	{
-		const char qc = drd->result->out_store1[k];
-		const char tc = drd->result->out_store2[k];
-		if (qc != '-') ++qrb;
-		if (tc != '-') ++trb;
-		if (qc == tc) ++eit;
-		else eit = 0;
+bool GetAlignment(const char* const query, const int query_start, const int query_size, const char* const target, const int target_start, const int target_size, DiffRunningData* const drd, M5Record& m5, const double error_rate, const int min_aln_size) {
+	if (!dw(query, query_size, query_start, target, target_size, target_start, drd->DynQ, drd->DynT, drd->align, drd->d_path, drd->aln_path, drd->result, &drd->swp, error_rate, min_aln_size)) {
+		return 0;
 	}
-	if (eit < consecutive_match_region_size) return false;
-	k -= consecutive_match_region_size;
+	const int consecutive_match_region_size(4);
+	// trim starting end of alignment
+	int qrb(0);	// q starting pads
+	int trb(0);	// t starting pads
+	int eit(0);	// matching run length
+	int k;
+	for (k = 0; k < drd->result->out_store_size; ++k) {
+		const char qc(drd->result->out_store1[k]);
+		const char tc(drd->result->out_store2[k]);
+		if (qc != '-') {
+			++qrb;
+		}
+		if (tc != '-') {
+			++trb;
+		}
+		if (qc != tc) {
+			eit = 0;
+		} else if (++eit == consecutive_match_region_size) {
+			++k;
+			break;
+		}
+	}
+	if (eit < consecutive_match_region_size) {	// no good match
+		return 0;
+	}
 	qrb -= consecutive_match_region_size;
 	trb -= consecutive_match_region_size;
-	const int start_aln_id = k;
-	if (start_aln_id < 0)
-	{
-		std::cout << qrb << "\t" << trb << "\t" << eit << "\t" << k << "\n";
+	const int start_aln_id(k - consecutive_match_region_size);
+	// trim trailing end of alignment
+	int qre(0);	// q ending pads
+	int tre(0);	// t ending pads
+	for (k = drd->result->out_store_size - 1, eit = 0; start_aln_id < k; --k) {
+		const char qc(drd->result->out_store1[k]);
+		const char tc(drd->result->out_store2[k]);
+		if (qc != '-') {
+			++qre;
+		}
+		if (tc != '-') {
+			++tre;
+		}
+		if (qc != tc) {
+			eit = 0;
+		} else if (++eit == consecutive_match_region_size) {
+			--k;
+			break;
+		}
 	}
-	
-	for (k = drd->result->out_store_size - 1, eit = 0; k >= 0 && eit < consecutive_match_region_size; --k)
-	{
-		const char qc = drd->result->out_store1[k];
-		const char tc = drd->result->out_store2[k];
-		if (qc != '-') ++qre;
-		if (tc != '-') ++tre;
-		if (qc == tc) ++eit;
-		else eit = 0;
-	}
-	if (eit < consecutive_match_region_size) return false;
-	k += consecutive_match_region_size;
 	qre -= consecutive_match_region_size;
 	tre -= consecutive_match_region_size;
-	const int end_aln_id = k + 1;
-	
+	const int end_aln_id(k + consecutive_match_region_size + 1);
 	m5qsize(m5) = query_size;
 	m5qoff(m5) = drd->result->query_start + qrb;
 	m5qend(m5) = drd->result->query_end - qre;
 	m5qdir(m5) = FWD;
-
 	m5ssize(m5) = target_size;
 	m5soff(m5) = drd->result->target_start + trb;
 	m5send(m5) = drd->result->target_end - tre;
 	m5sdir(m5) = FWD;
-
-	const int aln_size = end_aln_id - start_aln_id;
-
+	const int aln_size(end_aln_id - start_aln_id);
 	memcpy(m5qaln(m5), drd->result->out_store1 + start_aln_id, aln_size);
 	memcpy(m5saln(m5), drd->result->out_store2 + start_aln_id, aln_size);
 	memcpy(m5pat(m5), drd->result->out_match_pattern + start_aln_id, aln_size);
 	m5qaln(m5)[aln_size] = '\0';
 	m5saln(m5)[aln_size] = '\0';
 	m5pat(m5)[aln_size] = '\0';
-	
-	return true;
+	return 1;
 }
 
 } // end namespace ns_banded_sw

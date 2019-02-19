@@ -1,9 +1,14 @@
 #include "split_database.h"
 
+// make off_t 64 bit (from ftello man page)
+#define _FILE_OFFSET_BITS 64
+
 #include <string.h>
 
 #include <fstream>
 #include <string>
+#include <limits.h>	// PATH_MAX
+#include <unistd.h>	// unlink()
 
 #include "packed_db.h"
 #include "fasta_reader.h"
@@ -67,18 +72,24 @@ insert_one_offset(offset_list_t* list, const int offset, const int size)
 	++list->curr;
 }
 
-volume_t*
-new_volume_t(int num_reads, int num_bases)
-{
-    volume_t* volume = (volume_t*)malloc(sizeof(volume_t));
-    volume->num_reads = 0;
-    volume->curr = 0;
-	if (num_bases == 0) num_bases = (MCS + MSS);
-    volume->max_size = num_bases;
-    idx_t vol_bytes = (num_bases + 3) / 4;
-    safe_calloc(volume->data, uint8_t, vol_bytes);
-    volume->offset_list = new_offset_list_t(num_reads);
-    return volume;
+volume_t* new_volume_t(const int num_reads, int num_bases, const int no_allocate) {
+	volume_t* volume = (volume_t*)malloc(sizeof(volume_t));
+	volume->num_reads = 0;
+	volume->curr = 0;
+	if (no_allocate) {
+		volume->max_size = 0;
+		volume->data = 0;
+		volume->offset_list = 0;
+	} else {
+		if (num_bases == 0) {
+			num_bases = MCS + MSS;
+		}
+		idx_t vol_bytes = (num_bases + 3) / 4;
+		volume->max_size = vol_bytes * 4;
+		safe_calloc(volume->data, uint8_t, vol_bytes);
+		volume->offset_list = new_offset_list_t(num_reads);
+	}
+	return volume;
 }
 
 void
@@ -87,15 +98,21 @@ clear_volume_t(volume_t* v)
     assert(v);
     v->num_reads = 0;
     v->curr = 0;
-    v->offset_list->curr = 0;
-	memset(v->data, 0, v->max_size / 4);
+    if (v->offset_list) {
+        v->offset_list->curr = 0;
+    }
+	if (v->data) {
+		memset(v->data, 0, v->max_size / 4);
+	}
 }
 
 volume_t*
 delete_volume_t(volume_t* v)
 {
-    v->offset_list = delete_offset_list_t(v->offset_list);
-    free(v->data);
+    delete_offset_list_t(v->offset_list);
+    if (v->data) {
+        free(v->data);
+    }
     free(v);
     return NULL;
 }
@@ -119,7 +136,7 @@ add_one_seq(volume_t* volume, const char* s, const int size)
 }
 
 void
-extract_one_seq(volume_t* v, const int id, char* s)
+extract_one_seq(const volume_t* v, const int id, char* s)
 {
 	assert(id < v->num_reads);
 	int offset = v->offset_list->offset_list[id].offset;
@@ -150,6 +167,28 @@ dump_volume(const char* vol_name, volume_t* v)
 	int vol_bytes = (v->curr + 3) / 4;
 	SAFE_WRITE(v->data, uint8_t, vol_bytes, out);
 	fclose(out);
+}
+
+volume_t*
+load_volume_header(const char* vol_name)
+{
+	int num_reads, num_bases;
+	FILE* in = fopen(vol_name, "rb");
+	if (!in) { LOG(stderr, "failed to open file \'%s\'.", vol_name); exit(1); }
+	
+	// 1) number of reads
+	SAFE_READ(&num_reads, int, 1, in);
+	// 2) number of bases
+	SAFE_READ(&num_bases, int, 1, in);
+	
+	volume_t* v = new_volume_t(num_reads, num_bases, 1);
+	v->num_reads = num_reads;
+	v->curr = num_bases;
+	// 3) start read id
+	SAFE_READ(&v->start_read_id, int, 1, in);
+	
+	fclose(in);
+	return v;
 }
 
 volume_t*
@@ -218,51 +257,140 @@ extract_one_seq(ifstream& pac_file, PackedDB::SeqIndex& si, u1_t* buffer, char* 
 	seq[i] = '\0';
 }
 
-int
-split_raw_dataset(const char* reads, const char* wrk_dir)
-{
+class SplitState {
+    public:
+	int vol, rid;
+	idx_t num_reads, num_nucls;
+	FILE *idx_file;
+	SplitState(const char * const reads, const char * const wrk_dir) : done_(0), rd_pos_(0), fr_(reads) {
+		generate_idx_file_name(wrk_dir, idx_file_name_);
+		idx_file = fopen(idx_file_name_, "r");
+		if (idx_file) {		// number of vols = lines in index file
+			vol = 0;
+			char *line;
+			size_t length(1024);
+			safe_malloc(line, char, length);
+			ssize_t i;
+			while ((i = getline(&line, &length, idx_file)) != -1) {
+				if (i > 0 && line[i - 1] == '\n') {
+					--i;
+				}
+				if (i > 0 && line[i - 1] == '\r') {
+					--i;
+				}
+				if (i > 0) {
+					++vol;
+				}
+			}
+			fclose(idx_file);
+			done_ = 1;
+			return;
+		}
+		idx_file_name_tmp_ = ckpt_file_name_ = idx_file_name_;
+		ckpt_file_name_ += ".ckpt";
+		idx_file_name_tmp_ += ".tmp";
+		std::ifstream ckpt_in(ckpt_file_name_.c_str());
+		if (ckpt_in) {
+			off_t idx_pos;
+			// using off_t instead of std::streampos for rd_pos to allow
+			// >> for reading from file
+			ckpt_in >> vol >> num_reads >> num_nucls >> idx_pos >> rd_pos_;
+			if (!ckpt_in) {
+				ERROR("Error reading checkpoint file %s", ckpt_file_name_.c_str());
+			}
+			rid = num_reads;
+			fr_.seekg(rd_pos_);
+			idx_file = fopen(idx_file_name_tmp_.c_str(), "r+");
+			if (fseeko(idx_file, idx_pos, SEEK_SET) == -1) {
+				ERROR("Could not restore checkpoint, fseeko failed");
+			}
+		} else {
+			vol = rid = 0;
+			num_reads = num_nucls = 0;
+			idx_file = fopen(idx_file_name_tmp_.c_str(), "w");
+		}
+		if (!idx_file) {
+			ERROR("Could not open index file: %s", idx_file_name_tmp_.c_str());
+		}
+	}
+	~SplitState() { }
+	idx_t read_one_seq(Sequence& seq) {
+		// have to get position before reading, as read might not be
+		// covered by next checkpoint
+		rd_pos_ = fr_.tellg();
+		return fr_.read_one_seq(seq);
+	}
+	void checkpoint() {
+		std::string ckpt_file_name_tmp(ckpt_file_name_ + ".tmp");
+		std::ofstream ckpt_out(ckpt_file_name_tmp.c_str());
+		if (!ckpt_out) {
+			LOG(stderr, "Checkpoint failed at %d, could not open: %s", vol, ckpt_file_name_tmp.c_str());
+			return;
+		}
+		ckpt_out << vol << "\n" << num_reads << "\n" << num_nucls << "\n" << ftello(idx_file) << "\n" << rd_pos_ << "\n";
+		if (!ckpt_out) {
+			LOG(stderr, "Warning: error writing checkpoint at %d", vol);
+			return;
+		}
+		ckpt_out.close();
+		if (rename(ckpt_file_name_tmp.c_str(), ckpt_file_name_.c_str()) == -1) {
+			LOG(stderr, "Checkpoint failed at %d, could not rename: %s", vol, ckpt_file_name_tmp.c_str());
+		}
+	}
+	void finish() {
+		fclose(idx_file);
+		if (rename(idx_file_name_tmp_.c_str(), idx_file_name_) == -1) {
+			ERROR("Could not rename index file: %s", idx_file_name_tmp_.c_str());
+		}
+		unlink(ckpt_file_name_.c_str());
+	}
+	bool already_done() const {
+		return done_;
+	}
+    private:
+	bool done_;
+	off_t rd_pos_;
+	std::string ckpt_file_name_;	// idx_file_name + ".ckpt"
+	std::string idx_file_name_tmp_;	// idx_file_name + ".tmp"
+	char idx_file_name_[PATH_MAX];
+	FastaReader fr_;
+};
+
+int split_raw_dataset(const char* reads, const char* wrk_dir) {
 	DynamicTimer dtimer(__func__);
-	volume_t* v = new_volume_t(0, 0);
-	int vol = 0;
-	int rid = 0;
-	char idx_file_name[1024], vol_file_name[1024];
-	generate_idx_file_name(wrk_dir, idx_file_name);
-	FILE* idx_file = fopen(idx_file_name, "w");
-	FastaReader fr(reads);
+	SplitState state(reads, wrk_dir);
+	if (state.already_done()) {
+		return state.vol;
+	}
+	volume_t* v(new_volume_t(0, 0));
+	char vol_file_name[PATH_MAX];
 	Sequence read;
-	idx_t num_reads = 0, num_nucls = 0;
-	while (1)
-	{
-		idx_t rsize = fr.read_one_seq(read);
-		if (rsize == -1) break;
-		++num_reads;
-		num_nucls += rsize;
-		if (v->curr + rsize + 1 > MCS)
-		{
-			v->start_read_id = rid;
-			rid += v->num_reads;
-			generate_vol_file_name(wrk_dir, vol++, vol_file_name);
-			fprintf(idx_file, "%s\n", vol_file_name);
+	for (;;) {
+		const idx_t rsize(state.read_one_seq(read));
+		if (v->curr + rsize >= MCS || rsize == -1) {
+			v->start_read_id = state.rid;
+			state.rid += v->num_reads;
+			generate_vol_file_name(wrk_dir, state.vol++, vol_file_name);
+			if (fprintf(state.idx_file, "%s\n", vol_file_name) < 0) {
+				ERROR("Failed to write to index file");
+			}
+			fflush(state.idx_file);
 			dump_volume(vol_file_name, v);
+			if (rsize == -1) {
+				break;
+			}
+			state.checkpoint();
 			clear_volume_t(v);
 		}
 		add_one_seq(v, read.sequence().data(), rsize);
+		++state.num_reads;
+		state.num_nucls += rsize;
 		++v->curr;
 	}
-	
-	if (v->curr > 0)
-	{
-		v->start_read_id = rid;
-		rid += v->num_reads;
-		generate_vol_file_name(wrk_dir, vol++, vol_file_name);
-		fprintf(idx_file, "%s\n", vol_file_name);
-		dump_volume(vol_file_name, v);
-		clear_volume_t(v);
-	}
-	fclose(idx_file);
+	state.finish();
 	delete_volume_t(v);
-	LOG(stderr, "split \'%s\' (%lld reads, %lld nucls) into %d volumes.", reads, (long long)num_reads, (long long)num_nucls, vol);
-	return vol;
+	LOG(stderr, "split \'%s\' (%lld reads, %lld nucls) into %d volumes.", reads, (long long)state.num_reads, (long long)state.num_nucls, state.vol);
+	return state.vol;
 }
 
 void
@@ -282,7 +410,7 @@ split_dataset(const char* reads, const char* wrk_dir, int* num_vols)
 	volume_t* v = new_volume_t(0, 0);
 	int vol = 0;
 	int rid = 0;
-	char idx_file_name[1024], vol_file_name[1024];
+	char idx_file_name[PATH_MAX], vol_file_name[PATH_MAX];
 	generate_idx_file_name(wrk_dir, idx_file_name);
 	FILE* idx_file = fopen(idx_file_name, "w");
 	PackedDB::SeqIndex si;
@@ -375,6 +503,10 @@ load_volume_names(const char* idx_file_name, int num_vols)
 {
 	volume_names_t* vn = new_volume_names_t(num_vols);
 	FILE* fvn = fopen(idx_file_name, "r");
+	// allow testing to see if file exists
+	if (!fvn && num_vols == 0) {
+		return vn;
+	}
 	assert(fvn);
 	char* name;
 	size_t ns = 1024;

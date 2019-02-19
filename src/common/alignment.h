@@ -185,30 +185,170 @@ m4_to_candidate(const M4Record& m4, ExtensionCandidate& ec)
 	ec.score = m4vscore(m4);
 }
 
-struct M5Record
-{
+class M5Record {
+    public:
 	idx_t qid;		// 1) qname
-	idx_t qsize;  	// 2) qlength
-	idx_t qstart; 	// 3) qstart
+	idx_t qsize;		// 2) qlength
+	idx_t qstart; 		// 3) qstart
 	idx_t qend;		// 4) qend
-	int     qdir;		// 5) qstrand
+	int	qdir;		// 5) qstrand
 	idx_t sid;		// 6) sname
 	idx_t ssize;		// 7) slength
 	idx_t sstart;		// 8) sstart
 	idx_t send;		// 9) send
-	int     sdir;		// 10) sstrand
-	int     score;		// 11) score
-	int     mat;		// 12) match
-	int		mis; 	    // 13) mismatch
-	int     ins;		// 14) insertion
-	int		dels;		// 15) deletion
-	int		mapq;		// 16) mapQ
-	char*   pm_q;		// 17) aligned query
-	char*   pm_p;		// 18) aligned pattern
-	char*   pm_s;		// 19) aligned subject
+	int	sdir;		// 10) sstrand
+	int	score;		// 11) score
+	int	mat;		// 12) match
+	int	mis;		// 13) mismatch
+	int	ins;		// 14) insertion
+	int	dels;		// 15) deletion
+	int	mapq;		// 16) mapQ
+	char*	pm_q;		// 17) aligned query
+	char*	pm_p;		// 18) aligned pattern
+	char*	pm_s;		// 19) aligned subject
 	double	ident;		// 20) identity percentage
 	idx_t	qext;
 	idx_t 	sext;
+    public:
+	M5Record() : pm_q(0), pm_p(0), pm_s(0) { }
+	explicit M5Record(const idx_t n) : pm_q(new char[n]), pm_p(new char[n]), pm_s(new char[n]) { }
+	~M5Record() {
+		delete[] pm_q;
+		delete[] pm_p;
+		delete[] pm_s;
+	}
+	idx_t& m5qid() {
+		return qid;
+	}
+	const idx_t& m5qid() const {
+		return qid;
+	}
+	idx_t& m5qsize() {
+		return qsize;
+	}
+	const idx_t& m5qsize() const {
+		return qsize;
+	}
+	idx_t& m5qoff() {
+		return qstart;
+	}
+	const idx_t& m5qoff() const {
+		return qstart;
+	}
+	idx_t& m5qend() {
+		return qend;
+	}
+	const idx_t& m5qend() const {
+		return qend;
+	}
+	int& m5qdir() {
+		return qdir;
+	}
+	const int& m5qdir() const {
+		return qdir;
+	}
+	idx_t& m5sid() {
+		return sid;
+	}
+	const idx_t& m5sid() const {
+		return sid;
+	}
+	idx_t& m5ssize() {
+		return ssize;
+	}
+	const idx_t& m5ssize() const {
+		return ssize;
+	}
+	idx_t& m5soff() {
+		return sstart;
+	}
+	const idx_t& m5soff() const {
+		return sstart;
+	}
+	idx_t& m5send() {
+		return send;
+	}
+	const idx_t& m5send() const {
+		return send;
+	}
+	int& m5sdir() {
+		return sdir;
+	}
+	const int& m5sdir() const {
+		return sdir;
+	}
+	int& m5score() {
+		return score;
+	}
+	const int& m5score() const {
+		return score;
+	}
+	int& m5mat() {
+		return mat;
+	}
+	const int& m5mat() const {
+		return mat;
+	}
+	int& m5mis() {
+		return mis;
+	}
+	const int& m5mis() const {
+		return mis;
+	}
+	int& m5ins() {
+		return ins;
+	}
+	const int& m5ins() const {
+		return ins;
+	}
+	int& m5dels() {
+		return dels;
+	}
+	const int& m5dels() const {
+		return dels;
+	}
+	int& m5mapq() {
+		return mapq;
+	}
+	const int& m5mapq() const {
+		return mapq;
+	}
+	char*& m5qaln() {
+		return pm_q;
+	}
+	const char* m5qaln() const {
+		return pm_q;
+	}
+	char*& m5pat() {
+		return pm_p;
+	}
+	const char* m5pat() const {
+		return pm_p;
+	}
+	char*& m5saln() {
+		return pm_s;
+	}
+	const char* m5saln() const {
+		return pm_s;
+	}
+	double& m5ident() {
+		return ident;
+	}
+	const double& m5ident() const {
+		return ident;
+	}
+	idx_t& m5qext() {
+		return qext;
+	}
+	const idx_t& m5qext() const {
+		return qext;
+	}
+	idx_t& m5sext() {
+		return sext;
+	}
+	const idx_t& m5sext() const {
+		return sext;
+	}
 };
 
 #define m5qid(m) 		((m).qid)
@@ -238,38 +378,28 @@ void PrintM5Record(std::ostream& out, const M5Record& m5, const int printAln);
 void InitM5Record(M5Record& m5);
 void DestroyM5Record(M5Record& m5);
 
-inline M5Record* NewM5Record(idx_t maxAlnSize)
-{
-	M5Record* m5 = new M5Record;
-	m5qaln(*m5) = new char[maxAlnSize];
-	m5saln(*m5) = new char[maxAlnSize];
-	m5pat(*m5) = new char[maxAlnSize];
-	
-	return m5;
+inline M5Record* NewM5Record(const idx_t maxAlnSize) {
+	return new M5Record(maxAlnSize);
 }
 
-inline M5Record* DeleteM5Record(M5Record* m5)
-{
-	if (!m5) return NULL;
-	delete[] m5qaln(*m5);
-	delete[] m5saln(*m5);
-	delete[] m5pat(*m5);
-	delete m5;
+inline M5Record* DeleteM5Record(M5Record* const m5) {
+	if (m5) {
+		delete m5;
+	}
 	return NULL;
 }
 
-inline int M5RecordOvlpSize(const M5Record& m)
-{
-	int oq = m5qend(m) - m5qoff(m);
-	int os = m5send(m) - m5soff(m);
+inline int M5RecordOvlpSize(const M5Record& m) {
+	const int oq(m5qend(m) - m5qoff(m));
+	const int os(m5send(m) - m5soff(m));
 	return std::max(oq, os);
 }
 
 //struct Overlap
 //{
-//    index_t qid, qoff, qend, qsize, qext;
+//    idx_t qid, qoff, qend, qsize, qext;
 //    int qdir;
-//    index_t sid, soff, send, ssize, sext;
+//    idx_t sid, soff, send, ssize, sext;
 //    int sdir;
 //};
 

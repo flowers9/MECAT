@@ -4,118 +4,220 @@
 #include <fstream>
 #include <limits>
 #include <string>
+#include <vector>
+#include <unistd.h>
+#include <iostream>
 
 #include "../common/defs.h"
 #include "../common/pod_darr.h"
 
-template <class T>
-class PartitionResultsWriter
-{
-public:
-	typedef void (*file_name_generator)(const char* prefix, const idx_t id, std::string& name);
-	
-public:
-	PartitionResultsWriter(const int max_num_files)
-	{
-		file_is_open = 0;
-		num_open_files = 0;
-		MaxNumFiles = max_num_files;
-		results = new PODArray<T>[MaxNumFiles];
-		files = new std::ofstream[MaxNumFiles];
-		file_names = new std::string[MaxNumFiles];
-		min_seq_ids = new idx_t[MaxNumFiles];
-		max_seq_ids = new idx_t[MaxNumFiles];
-		for (int i = 0; i < MaxNumFiles; ++i) results[i].reserve(kStoreSize);
+template <class T> class PartitionResultsWriter {
+    public:
+	typedef void (*file_name_generator)(const char* prefix, idx_t id, std::string& name);
+    public:
+	const int kNumFiles;	// effective open file limit
+	int kStoreSize;
+	int num_open_files;
+	int num_reads;
+	PODArray<T>* results;	// can't use vector<>, causes memory corruption
+	std::ofstream* files;	// can't use vector<>, non-copyable
+	std::vector<std::string> file_names;
+	std::vector<idx_t> min_seq_ids;
+	std::vector<idx_t> max_seq_ids;
+    public:
+	// can't make kNumFiles static, as sysconf() is run-time only;
+	// leave room for stdin, stdout, stderr, a few others
+	explicit PartitionResultsWriter(const int num_files) : kNumFiles(num_files > 0 ? num_files : sysconf(_SC_OPEN_MAX) - 10), kStoreSize(0), num_open_files(0), num_reads(0), results(0), files(0) { }
+	~PartitionResultsWriter() {
+		CloseFiles();
 	}
-	
-	~PartitionResultsWriter()
-	{
-		delete[] results;
-		delete[] files;
-		delete[] file_names;
-		delete[] min_seq_ids;
-		delete[] max_seq_ids;
+	void OpenFiles(const idx_t sfid, const idx_t efid, const std::string& prefix, file_name_generator fng, const std::string& done_file) {
+		CloseFiles();
+		if (efid <= sfid) {
+			return;
+		}
+		done_file_ = done_file;
+		ckpt_file_ = done_file_ + ".ckpt";
+		ckpt_file_tmp_ = ckpt_file_ + ".tmp";
+		num_open_files = efid - sfid;
+		batch_start_ = sfid;
+		allocate_data(prefix, fng, 0);
 	}
-	
-	void OpenFiles(const idx_t sfid, const idx_t efid, const std::string& prefix, file_name_generator fng)
-	{
-		if (file_is_open) CloseFiles();
-		
-		const int nf = efid - sfid;
-        if (nf == 0) return;
-        for (int i = 0; i < nf; ++i)
-        {
-            fng(prefix.data(), i + sfid, file_names[i]);
-            open_fstream(files[i], file_names[i].c_str(), std::ios::binary);
-            min_seq_ids[i] = std::numeric_limits<index_t>::max();
-            max_seq_ids[i] = std::numeric_limits<index_t>::min();
-			results[i].clear();
-        }
-        num_open_files = nf;
-        file_is_open = true;
-	}
-	
-	void CloseFiles()
-	{
-		if (!file_is_open) return;
-		for (int i = 0; i < num_open_files; ++i)
-		{
-			if (results[i].size())
-			{
-				char* buf = (char*)results[i].data();
-				std::streamsize s = sizeof(T) * results[i].size();
-				files[i].write(buf, s);
+	void CloseFiles() {
+		if (num_open_files == 0) {
+			return;
+		}
+		for (int i(0); i < num_open_files; ++i) {	// flush buffers
+			if (results[i].size()) {
+				write_buffer_to_disk(i);
+			}
+			close_fstream(files[i]);
+			// don't attempt to re-finish finished files
+			if (!file_names[i].empty()) {
+				const std::string tmp_file(file_names[i] + ".tmp");
+				if (rename(tmp_file.c_str(), file_names[i].c_str()) == -1) {
+					ERROR("Could not rename %s", tmp_file.c_str());
+				}
 			}
 		}
-        for (int i = 0; i < num_open_files; ++i) close_fstream(files[i]);
-        file_is_open = false;
-        num_open_files = 0;
+		delete[] results;
+		delete[] files;
+		file_names.clear();
+		min_seq_ids.clear();
+		max_seq_ids.clear();
+		kStoreSize = num_open_files = 0;
+		results = 0;
+		files = 0;
 	}
-	
-	void WriteOneResult(const int fid, const idx_t seq_id, const T& r)
-	{
-		if (fid >= num_open_files) {
-			std::cout << "fid = " << fid
-					  << ", num_open_files = "
-					  << num_open_files
-					  << "\n";
+	void finalize() {
+		// touch done file
+		std::ofstream done(done_file_.c_str());
+		if (!done) {
+			ERROR("Could not create done file %s", done_file_.c_str());
 		}
-		r_assert(fid < num_open_files);
-		min_seq_ids[fid] = std::min(min_seq_ids[fid], seq_id);
-        max_seq_ids[fid] = std::max(max_seq_ids[fid], seq_id);
-		results[fid].push_back(r);
-		if (results[fid].size() == kStoreSize)
-		{
-			char* buf = (char*)results[fid].data();
-			std::streamsize s = sizeof(T) * results[fid].size();
-			files[fid].write(buf, s);
-			results[fid].clear();
+		done.close();
+		// remove checkpoint file
+		unlink(std::string(done_file_ + ".ckpt").c_str());
+	}
+	int WriteOneResult(const int i, const idx_t seq_id, const T& r) {
+		min_seq_ids[i] = std::min(min_seq_ids[i], seq_id);
+		max_seq_ids[i] = std::max(max_seq_ids[i], seq_id);
+		results[i].push_back(r);
+		if (results[i].size() == kStoreSize) {
+			write_buffer_to_disk(i);
+			results[i].clear();
+			if (is_checkpoint_time()) {
+				return 1;
+			}
+		}
+		return 0;
+	}
+	int restart(const std::string& prefix, file_name_generator fng, const std::string& done_file, idx_t& sfid, off_t& input_pos) {
+		CloseFiles();
+		done_file_ = done_file;
+		ckpt_file_ = done_file_ + ".ckpt";
+		ckpt_file_tmp_ = ckpt_file_ + ".tmp";
+		std::ifstream in(ckpt_file_.c_str());
+		if (!in) {
+			return 0;
+		}
+		in >> batch_start_ >> num_open_files >> num_reads >> input_pos;
+		if (!in) {
+			ERROR("Read error while restoring checkpoint from %s", ckpt_file_.c_str());
+		}
+		allocate_data(prefix, fng, 1);
+		for (int i(0); i < num_open_files; ++i) {
+			off_t file_pos;
+			in >> file_pos >> min_seq_ids[i] >> max_seq_ids[i];
+			if (!in) {
+				ERROR("Read error while restore checkpoint from %s (%d)", ckpt_file_.c_str(), i);
+			}
+			// don't need to restart finished files
+			if (!file_names[i].empty() && !files[i].seekp(file_pos)) {
+				ERROR("Seek failed while restoring checkpoint from %s (%d)", ckpt_file_.c_str(), i);
+			}
+		}
+		sfid = batch_start_;
+		return 1;
+	}
+	void checkpoint(const off_t input_pos) {
+		std::ofstream out(ckpt_file_tmp_.c_str());
+		if (!out) {
+			LOG(stderr, "Checkpoint failed: couldn't open %s", ckpt_file_tmp_.c_str());
+			return;
+		}
+		out << batch_start_ << " " << num_open_files << " " << num_reads << " " << input_pos << "\n";
+		if (!out) {
+			LOG(stderr, "Checkpoint failed: write failed: %s", ckpt_file_tmp_.c_str());
+			return;
+		}
+		// flush buffers
+		for (int i(0); i < num_open_files; ++i) {
+			if (results[i].size()) {
+				write_buffer_to_disk(i);
+				results[i].clear();
+			}
+			files[i].flush();
+			out << off_t(files[i].tellp()) << " " << min_seq_ids[i] << " " << max_seq_ids[i] << "\n";
+			if (!out) {
+				LOG(stderr, "Checkpoint failed: write failed: %s", ckpt_file_tmp_.c_str());
+				return;
+			}
+		}
+		out.close();
+		if (rename(ckpt_file_tmp_.c_str(), ckpt_file_.c_str()) == -1) {
+			LOG(stderr, "Checkpoint failed: rename failed: %s", ckpt_file_.c_str());
 		}
 	}
-	
-public:
-	int MaxNumFiles;
-	static const int kStoreSize = 500000;
-	PODArray<T>* results;
-	bool file_is_open;
-	int num_open_files;
-	std::ofstream* files;
-	std::string* file_names;
-	idx_t* min_seq_ids;
-	idx_t* max_seq_ids;
+    private:
+	idx_t batch_start_ ;
+	time_t next_checkpoint_time_;
+	std::string done_file_;
+	std::string ckpt_file_;
+	std::string ckpt_file_tmp_;
+    private:
+	int is_checkpoint_time() {
+		const time_t current_time(time(0));
+		if (current_time < next_checkpoint_time_ || current_time == static_cast<time_t>(-1)) {
+			return 0;
+		} else {
+			next_checkpoint_time_ = current_time + 300;
+			return 1;
+		}
+	}
+	void allocate_data(const std::string& prefix, file_name_generator fng, const int is_restart) {
+		// allocate about a gb of memory as buffer, split among num_open_files
+		kStoreSize = (1 << 30) / sizeof(T) / num_open_files;
+		results = new PODArray<T>[num_open_files];
+		file_names.assign(num_open_files, "");
+		min_seq_ids.assign(num_open_files, std::numeric_limits<idx_t>::max());
+		max_seq_ids.assign(num_open_files, std::numeric_limits<idx_t>::min());
+		files = new std::ofstream[num_open_files];
+		for (int i(0); i < num_open_files; ++i) {
+			fng(prefix.c_str(), i + batch_start_, file_names[i]);
+			const std::string tmp_file(file_names[i] + ".tmp");
+			if (is_restart) {
+				if (access(file_names[i].c_str(), F_OK) == 0) {
+					// already finished
+					file_names[i].clear();
+					// use /dev/null to prevent write errors
+					open_fstream(files[i], "/dev/null", std::ios::binary);
+				} else {
+					// don't truncate on restart
+					open_fstream(files[i], tmp_file.c_str(), std::ios::binary | std::ios::in);
+				}
+			} else {
+				open_fstream(files[i], tmp_file.c_str(), std::ios::binary);
+			}
+			if (!files[i]) {
+				ERROR("Open failed on %s", tmp_file.c_str());
+			}
+			results[i].reserve(kStoreSize);
+		}
+		next_checkpoint_time_ = time(0) + 300;
+	}
+	void write_buffer_to_disk(const int i) {
+		// can't use static_cast<>
+		const char* const buf((char*)results[i].data());
+		const std::streamsize s(sizeof(T) * results[i].size());
+		if (!files[i].write(buf, s)) {
+			ERROR("Error writing to %s", file_names[i].c_str());
+		}
+	}
 };
 
-template <class T>
-T* load_partition_data(const char* path, idx_t& num_results)
-{
+template <class T> T* load_partition_data(const char* const path, idx_t& num_results) {
 	std::ifstream in;
 	open_fstream(in, path, std::ios::binary);
 	in.seekg(0, std::ios::end);
-	std::streampos fs = in.tellg();
+	const std::streampos fs(in.tellg());
 	in.seekg(0, std::ios::beg);
 	num_results = fs / sizeof(T);
-	T* arr = new T[num_results];
-	in.read((char*)arr, fs);
+	T* const arr(new T[num_results]);
+	in.read((char*)arr, fs);	// can't use static_cast<>
+	if (!in) {
+		ERROR("Error reading partition data: %s", path);
+	}
 	close_fstream(in);
 	return arr;
 }

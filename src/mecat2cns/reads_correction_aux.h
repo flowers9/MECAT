@@ -3,6 +3,7 @@
 
 #include <vector>
 #include <cstring>
+#include <unistd.h>
 
 #include "dw.h"
 #include "../common/packed_db.h"
@@ -68,110 +69,209 @@ struct CnsAln
 	}
 };
 
-class CnsAlns
-{
-public:
-	CnsAlns()
-	{
+class CnsAlns {
+    public:
+	CnsAlns() : num_alns_(0) {
 		safe_malloc(cns_alns_, CnsAln, MAX_CNS_OVLPS);
-		clear();
 	}
-	~CnsAlns()
-	{
+	~CnsAlns() {
 		safe_free(cns_alns_);
 	}
-	void clear() { num_alns_ = 0; }
-	int num_alns() { return num_alns_; }
-	CnsAln* begin() { return cns_alns_; }
-	CnsAln* end() { return cns_alns_ + num_alns_; }
-	void add_aln(const int soff, const int send, const std::string& qstr, const std::string& tstr)
-	{
+	void clear() {
+		num_alns_ = 0;
+	}
+	int num_alns() const {
+		return num_alns_;
+	}
+	CnsAln* begin() {
+		return cns_alns_;
+	}
+	CnsAln* end() {
+		return cns_alns_ + num_alns_;
+	}
+	void add_aln(const int soff, const int send, const std::string& qstr, const std::string& tstr) {
 		r_assert(qstr.size() == tstr.size());
-		CnsAln& a = cns_alns_[num_alns_++];
+		CnsAln& a(cns_alns_[num_alns_++]);
 		a.soff = soff;
 		a.send = send;
 		a.aln_idx = 0;
 		a.aln_size = qstr.size();
-		memcpy(a.qaln, qstr.data(), qstr.size());
-		a.qaln[qstr.size()] = '\0';
-		memcpy(a.saln, tstr.data(), tstr.size());
-		a.saln[tstr.size()] = '\0';
+		memcpy(a.qaln, qstr.c_str(), a.aln_size + 1);
+		memcpy(a.saln, tstr.c_str(), a.aln_size + 1);
 	}
-	void get_mapping_ranges(std::vector<MappingRange>& ranges)
-	{
+	void get_mapping_ranges(std::vector<MappingRange>& ranges) const {
 		ranges.clear();
-		for (int i = 0; i < num_alns_; ++i) ranges.push_back(MappingRange(cns_alns_[i].soff, cns_alns_[i].send));
+		ranges.reserve(num_alns_);
+		for (int i(0); i < num_alns_; ++i) {
+			ranges.push_back(MappingRange(cns_alns_[i].soff, cns_alns_[i].send));
+		}
 	}
-	
-private:
+    private:
+	int num_alns_;
 	CnsAln* cns_alns_;
-	int     num_alns_;
 };
 
-#define MAX_CNS_RESULTS 10000
+// 1k seems to work a bit better than 10k - perhaps less time waiting for
+// another thread to finish writing?
+#define MAX_CNS_RESULTS 1000
 
-struct ConsensusThreadData
-{
-	ReadsCorrectionOptions rco;
-	int thread_id;
-	PackedDB* reads;
+struct CmpExtensionCandidateBySidAndScore {
+	bool operator()(const ExtensionCandidate& a, const ExtensionCandidate& b) {
+		if (a.sid != b.sid) {			// primary sort
+			return a.sid < b.sid;		// for splitting up in allocate_ecs()
+		} else if (a.score != b.score) {	// secondary sort
+			return b.score < a.score;	// process best ones first
+		} else if (a.qid != b.qid) {
+			return a.qid < b.qid;
+		} else if (a.qext != b.qext) {
+			return a.qext < b.qext;
+		} else if (a.sext != b.sext) {		// tertiary sort
+			return a.sext < b.sext;		// make sorting consistent
+		} else {
+			return a.qdir < b.qdir;
+		}
+		// sdir, qsize, ssize are all the same by this point
+		// qoff, soff, qend, send are all zero
+	}
+};
+
+class ConsensusPerThreadData {
+    public:
+	// num_candidates, candidates initialized by allocate_ecs()
+	// next_candidate initialized by ConsensusThreadData::restart()
+	idx_t num_candidates, next_candidate;
 	ExtensionCandidate* candidates;
-	int num_candidates;
 	ns_banded_sw::DiffRunningData* drd_s;
 	ns_banded_sw::DiffRunningData* drd_l;
-	M5Record* m5;
+	CnsTableItem cns_table[MAX_SEQ_SIZE];
+	uint1 id_list[MAX_SEQ_SIZE];
+	M5Record m5;
 	CnsAlns cns_alns;
 	std::vector<CnsResult> cns_results;
 	std::vector<char> query;
 	std::vector<char> target;
 	std::string qaln;
 	std::string saln;
-	CnsTableItem* cns_table;
-	uint1* id_list;
-	std::ostream* out;
-	pthread_mutex_t out_lock;
-	
-	ConsensusThreadData(ReadsCorrectionOptions* prco, int tid, PackedDB* r, ExtensionCandidate* ec, int nec, std::ostream* output)
-	{
-		rco = (*prco);
-		thread_id = tid;
-		reads = r;
-		candidates = ec;
-		num_candidates = nec;
-		drd_s = new ns_banded_sw::DiffRunningData(ns_banded_sw::get_sw_parameters_small());
-		drd_l = new ns_banded_sw::DiffRunningData(ns_banded_sw::get_sw_parameters_large());
-		m5 = NewM5Record(MAX_SEQ_SIZE);
-		out = output;
-		
+    public:
+	ConsensusPerThreadData() : drd_s(new ns_banded_sw::DiffRunningData(ns_banded_sw::get_sw_parameters_small())), drd_l(new ns_banded_sw::DiffRunningData(ns_banded_sw::get_sw_parameters_large())), m5(MAX_SEQ_SIZE) {
+		cns_results.reserve(MAX_CNS_RESULTS);
 		query.reserve(MAX_SEQ_SIZE);
 		target.reserve(MAX_SEQ_SIZE);
 		qaln.reserve(MAX_SEQ_SIZE);
 		saln.reserve(MAX_SEQ_SIZE);
-		safe_malloc(cns_table, CnsTableItem, MAX_SEQ_SIZE);
-		safe_malloc(id_list, uint1, MAX_SEQ_SIZE);
-		pthread_mutex_init(&out_lock, NULL);
 	}
-	
-	~ConsensusThreadData()
-	{
+	~ConsensusPerThreadData() {
 		delete drd_s;
 		delete drd_l;
-		m5 = DeleteM5Record(m5);
-		safe_free(cns_table);
-		safe_free(id_list);
 	}
 };
 
-void normalize_gaps(const char* qstr, const char* tstr, const index_t aln_size, std::string& qnorm, std::string& tnorm, const bool push);
+class ConsensusThreadData {
+    public:
+	ReadsCorrectionOptions& rco;
+	PackedDB& reads;
+	std::ostream& out;
+	pthread_mutex_t out_lock;
+	// this doesn't work as a vector - all the pointers end up pointing
+	// to the same values, and eventually it seg faults (probably a
+	// compiler optimization bug)
+	ConsensusPerThreadData* data;
+    public:
+	ConsensusThreadData(ReadsCorrectionOptions& prco, PackedDB& r, std::ostream& output, const char* const input_file_name) : rco(prco), reads(r), out(output), data(new ConsensusPerThreadData[prco.num_threads]), last_thread_id_(-1), num_threads_written_(0) {
+		done_file_ = input_file_name;
+		done_file_ += ".done";
+		ckpt_file_ = input_file_name;
+		ckpt_file_ += ".ckpt";
+		ckpt_file_tmp_ = ckpt_file_ + ".tmp";
+		pthread_mutex_init(&out_lock, NULL);
+		pthread_mutex_init(&id_lock_, NULL);
+	}
+	~ConsensusThreadData() {
+		delete[] data;
+		pthread_mutex_destroy(&out_lock);
+		pthread_mutex_destroy(&id_lock_);
+	}
+	int get_thread_id() {
+		pthread_mutex_lock(&id_lock_);
+		const int tid(++last_thread_id_);
+		pthread_mutex_unlock(&id_lock_);
+		return tid;
+	}
+	void write_buffer(const int tid, const idx_t i) {
+		ConsensusPerThreadData& pdata(data[tid]);
+		std::vector<CnsResult>::const_iterator a(pdata.cns_results.begin());
+		const std::vector<CnsResult>::const_iterator end_a(pdata.cns_results.end());
+		pthread_mutex_lock(&out_lock);
+		for (; a != end_a; ++a) {
+			out << ">" << a->id << "_" << a->range[0] << "_" << a->range[1] << "_" << a->seq.size() << "\n" << a->seq << "\n";
+			if (!out) {
+				ERROR("Error writing output");
+			}
+		}
+		pdata.next_candidate = i;
+		if (++num_threads_written_ <= rco.num_threads) {
+			checkpoint();
+			num_threads_written_ = 0;
+		}
+		pthread_mutex_unlock(&out_lock);
+		pdata.cns_results.clear();
+	}
+	int restart(off_t& output_pos) {
+		if (access(ckpt_file_.c_str(), F_OK) != 0) {
+			for (int i(0); i < rco.num_threads; ++i) {
+				data[i].next_candidate = 0;
+			}
+			return 0;
+		}
+		std::ifstream ckpt_in(ckpt_file_.c_str());
+		if (!ckpt_in) {
+			ERROR("Restart failed: could not open checkpoint file: %s", ckpt_file_.c_str());
+		}
+		ckpt_in >> rco.job_index >> output_pos;
+		if (!ckpt_in) {
+			ERROR("Restart failed: could not read checkpoint file: %s", ckpt_file_.c_str());
+		}
+		for (int i(0); i < rco.num_threads; ++i) {
+			ckpt_in >> data[i].next_candidate;
+			if (!ckpt_in) {
+				ERROR("Restart failed: could not read checkpoint file: %s", ckpt_file_.c_str());
+			}
+		}
+		return 1;
+	}
+    private:
+	void checkpoint() {
+		std::ofstream ckpt_out(ckpt_file_tmp_.c_str());
+		if (!ckpt_out) {
+			LOG(stderr, "Checkpoint failed: couldn't open %s", ckpt_file_tmp_.c_str());
+			return;
+		}
+		out.flush();
+		ckpt_out << rco.job_index << " " << off_t(out.tellp()) << "\n";
+		if (!ckpt_out) {
+			LOG(stderr, "Checkpoint failed: write failed: %s", ckpt_file_tmp_.c_str());
+			return;
+		}
+		for (int i(0); i < rco.num_threads; ++i) {
+			ckpt_out << data[i].next_candidate << "\n";
+			if (!ckpt_out) {
+				LOG(stderr, "Checkpoint failed: write failed: %s", ckpt_file_tmp_.c_str());
+				return;
+			}
+		}
+		ckpt_out.close();
+		if (rename(ckpt_file_tmp_.c_str(), ckpt_file_.c_str()) == -1) {
+			LOG(stderr, "Checkpoint failed: rename failed: %s", ckpt_file_.c_str());
+		}
+	}
+    private:
+	int last_thread_id_, num_threads_written_;
+	pthread_mutex_t id_lock_;
+	std::string done_file_, ckpt_file_, ckpt_file_tmp_;
+};
 
-void
-build_cns_thrd_data_can(ExtensionCandidate* ec_list, 
-						const int nec,
-						const idx_t min_rid,
-						const idx_t max_rid,
-						ReadsCorrectionOptions* prco,
-						PackedDB* reads,
-						std::ostream* out,
-					    ConsensusThreadData** ppctd);
+void normalize_gaps(const char* qstr, const char* tstr, const idx_t aln_size, std::string& qnorm, std::string& tnorm, bool push);
+
+void allocate_ecs(ConsensusThreadData &data, ExtensionCandidate* ec_list, idx_t nec);
 
 #endif // _READS_CORRECTION_AUX_H

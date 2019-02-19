@@ -13,6 +13,8 @@ public:
 public:
     FastaReader(const char* fasta_file_name) : m_Reader(fasta_file_name) { encode_table = get_dna_encode_table(); }
     idx_t read_one_seq(Sequence& seq);
+    std::streampos tellg() const { return m_Reader.tellg(); }
+    void seekg(std::streampos pos) { m_Reader.seekg(pos); }
 
 private:
     void x_parse_defline(const OneDataLine& line, str_t& header);

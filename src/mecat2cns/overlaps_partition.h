@@ -9,26 +9,19 @@ void
 generate_partition_index_file_name(const char* m4_file_name, std::string& ret);
 
 void
-generate_partition_file_name(const char* m4_file_name, const index_t part, std::string& ret);
+generate_partition_file_name(const char* m4_file_name, const idx_t part, std::string& ret);
 
 void
-partition_m4records(const char* m4_file_name, 
-					const double min_cov_ratio, 
-					const index_t batch_size, 
-					const int min_read_size,
-				    int num_files);
+partition_m4records(const char* m4_file_name, double min_cov_ratio, idx_t batch_size, int min_read_size, int num_files);
 
 void
-partition_candidates(const char* input, 
-					 const idx_t batch_size, 
-					 const int min_read_size,
-					 int num_files);
+partition_candidates(const char* input, idx_t batch_size, int min_read_size, int num_files, idx_t num_reads = 0);
 
 struct PartitionFileInfo
 {
     std::string file_name;
-    index_t min_seq_id;
-    index_t max_seq_id;
+    idx_t min_seq_id;
+    idx_t max_seq_id;
 };
 
 void
