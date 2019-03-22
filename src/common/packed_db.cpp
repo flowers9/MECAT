@@ -34,7 +34,7 @@ void PackedDB::dump_idx(const PODArray<SeqIndex>& idx_list, const char* const pa
 	open_fstream(out, path, std::ios::out);
 	idx_t i(0), n(idx_list.size());
 	for (i = 0; i < n; ++i) {
-		out << idx_list[i].id << "\t" << idx_list[i].offset << "\t" << idx_list[i].size << "\n";
+		out << idx_list[i].offset << "\t" << idx_list[i].size << "\n";
 	}
 	close_fstream(out);
 }
@@ -44,7 +44,7 @@ void PackedDB::load_idx(const char* const path, PODArray<SeqIndex>& idx_list) {
 	std::ifstream in;
 	open_fstream(in, path, std::ios::in);
 	SeqIndex si;
-	while (in >> si.id >> si.offset >> si.size) {
+	while (in >> si.offset >> si.size) {
 		idx_list.push_back(si);
 	}
 	close_fstream(in);
@@ -81,7 +81,7 @@ void PackedDB::pack_fasta_db(const char* const path, const char* const output_pr
 	std::ofstream iout;
 	open_fstream(iout, n.c_str(), std::ios::out);
 	Sequence read;
-	idx_t id(-1), tsize(0);
+	idx_t count(0), tsize(0);
 	for (;;) {
 		idx_t rsize(fr.read_one_seq(read));
 		if (rsize == -1) {
@@ -95,16 +95,17 @@ void PackedDB::pack_fasta_db(const char* const path, const char* const output_pr
 			const u1_t c(et[static_cast<int>(s[i])]);
 			set_char(buffer, i, c < 3 ? c : 3);
 		}
-		iout << ++id << "\t" << tsize << "\t" << rsize << "\n";
+		iout << tsize << "\t" << rsize << "\n";
 		rsize = (rsize + 3) / 4;
 		sb_write(psb, buffer, rsize);
 		tsize += rsize * 4;
+		++count;
 	}
 	sb_write(psb, &tsize, sizeof(idx_t));
 	close_fstream(pout);
 	close_fstream(iout);
 	safe_free(buffer);
-	LOG(stdout, "pack %lld reads, totally %lld residues", (long long)(id + 1), (long long)tsize);
+	LOG(stdout, "pack %lld reads, totally %lld residues", (long long)count, (long long)tsize);
 }
 
 void PackedDB::add_one_seq(const Sequence& seq) {

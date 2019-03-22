@@ -7,7 +7,7 @@
 class PackedDB {
     public:
 	struct SeqIndex {
-		idx_t id, offset, size;
+		idx_t offset, size;
 	};
     public:
 	PackedDB() : pac(NULL), db_size(0), max_db_size(0) {}

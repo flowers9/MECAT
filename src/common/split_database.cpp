@@ -414,7 +414,7 @@ split_dataset(const char* reads, const char* wrk_dir, int* num_vols)
 	generate_idx_file_name(wrk_dir, idx_file_name);
 	FILE* idx_file = fopen(idx_file_name, "w");
 	PackedDB::SeqIndex si;
-	while (in_idx_file >> si.id >> si.offset >> si.size)
+	while (in_idx_file >> si.offset >> si.size)
 	{
 		if (v->curr + si.size + 1 > MCS)
 		{
