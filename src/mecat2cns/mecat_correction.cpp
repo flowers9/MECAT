@@ -11,15 +11,21 @@ namespace ns_meap_cns {
 #define FINS 4
 #define UNDS 8
 
-inline uint1
-identify_one_consensus_item(CnsTableItem& cns_item, const int min_cov)
-{
-	uint1 ident = 0;
-	int cov = cns_item.mat_cnt + cns_item.ins_cnt;
-	if (cns_item.mat_cnt >= cov * 0.8) ident |= FMAT;
-	if (cns_item.ins_cnt >= cov * 0.8) ident |= FINS;
-	if (!ident) ident |= UNDS;
-	if (cns_item.del_cnt >= cov * 0.4) ident |= FDEL;
+// returns type of coverage present
+
+inline uint1 identify_one_consensus_item(const CnsTableItem& cns_item, const int min_cov) {
+	const int cov(ceil((cns_item.mat_cnt + cns_item.ins_cnt) * 0.8));
+	uint1 ident;
+	if (cns_item.mat_cnt >= cov) {		// coverage is 80% or more matches
+		ident = FMAT;
+	} else if (cns_item.ins_cnt >= cov) {	// coverage is 80% or more inserts
+		ident = FINS;
+	} else {				// neither of the above
+		ident = UNDS;
+	}
+	if (2 * cns_item.del_cnt >= cov) {	// deletes are 40% or more than the coverage
+		ident |= FDEL;
+	}
 	return ident;
 }
 
@@ -33,43 +39,36 @@ struct CompareOverlapByOverlapSize
 	}
 };
 
-void
-meap_add_one_aln(const std::string& qaln, const std::string& saln, idx_t start_soff, CnsTableItem* cns_table, const char* org_seq)
-{
+void meap_add_one_aln(const std::string& qaln, const std::string& saln, idx_t start_soff, CnsTableItem* const cns_table, const char* const org_seq) {
 	r_assert(qaln.size() == saln.size());
-	const idx_t aln_size = qaln.size();
-	idx_t i = 0;
-	const char kGap = '-';
-	while (i < aln_size)
-	{
-		const char q = qaln[i];
-		const char s = saln[i];
-		if (q == kGap && s == kGap) { ++i; continue; }
-		
-		if (q == s) { ++cns_table[start_soff].mat_cnt; cns_table[start_soff].base = s; ++start_soff; ++i; }
-		else if (q == kGap) { ++cns_table[start_soff].ins_cnt; ++start_soff; ++i; }
-		else
-		{
-			r_assert(s == kGap);
-			idx_t j = i + 1;
-			while (j < aln_size && saln[j] == kGap) ++j;
+	const idx_t aln_size(qaln.size());
+	for (idx_t i(0); i < aln_size; ) {
+		const char q(qaln[i]);
+		const char s(saln[i]);
+		if (q == '-' && s == '-') {	// skip
+			++i;
+		} else if (q == s) {		// match
+			++cns_table[start_soff].mat_cnt;
+			cns_table[start_soff].base = s;
+			++start_soff;
+			++i;
+		} else if (q == '-') {		// insert
+			++cns_table[start_soff].ins_cnt;
+			++start_soff;
+			++i;
+		} else {			// delete
+			r_assert(s == '-');
+			for (++i; i < aln_size && saln[i] == '-'; ++i) { }
 			++cns_table[start_soff - 1].del_cnt;
-			i = j;
 		}
 	}
 }
 
-void
-meap_cns_one_indel(const int sb, const int se, CnsAlns& cns_vec, 
-				   const int min_cov, std::string& aux_qstr,
-				   std::string& aux_tstr, std::string& cns)
-{
+void meap_cns_one_indel(const int sb, const int se, CnsAlns& cns_vec, const int min_cov, std::string& aux_qstr, std::string& aux_tstr, std::string& cns) {
 	AlnGraphBoost ag(se - sb + 1);
 	int sb_out;
-	for (CnsAln* iter = cns_vec.begin(); iter != cns_vec.end(); ++iter)
-	{
-		if ((*iter).retrieve_aln_subseqs(sb, se, aux_qstr, aux_tstr, sb_out))
-		{
+	for (CnsAln* a(cns_vec.begin()); a != cns_vec.end(); ++a) {
+		if (a->retrieve_aln_subseqs(sb, se, aux_qstr, aux_tstr, sb_out)) {
 			ag.addAln(aux_qstr, aux_tstr, sb_out - sb + 1);
 		}
 	}		
@@ -77,87 +76,102 @@ meap_cns_one_indel(const int sb, const int se, CnsAlns& cns_vec,
 	ag.consensus(min_cov * 0.4, cns);
 }
 
-void
-meap_consensus_one_segment(CnsTableItem* cns_list, const int cns_list_size, 
-						   uint1* cns_id_vec,
-						   int start_soff, CnsAlns& cns_vec, 
-						   std::string& aux_qstr, std::string& aux_tstr,
-						   std::string& target, const int min_cov)
-{
-	for (int i = 0; i < cns_list_size; ++i) cns_id_vec[i] = identify_one_consensus_item(cns_list[i], min_cov);
-	int i = 0, j; 
+void meap_consensus_one_segment(const CnsTableItem* const cns_list, const int cns_list_size, uint1* const cns_id_vec, const int start_soff, CnsAlns& cns_vec, std::string& aux_qstr, std::string& aux_tstr, std::string& target, const int min_cov) {
+	// get types of coverage
+	for (int i(0); i < cns_list_size; ++i) {
+		cns_id_vec[i] = identify_one_consensus_item(cns_list[i], min_cov);
+	}
 	std::string cns;
 	target.clear();
-	while (i < cns_list_size && !(cns_id_vec[i] & FMAT)) ++i;
-	while (i < cns_list_size)
-	{
+	const uint1 unds_or_fdel(UNDS | FDEL);	// questionable coverage types
+	int i(0); 
+	// advance to matching coverage
+	for (; i < cns_list_size && !(cns_id_vec[i] & FMAT); ++i) { }
+	while (i < cns_list_size) {
 		target.push_back(cns_list[i].base);
-		j = i + 1;
-		while (j < cns_list_size && !(cns_id_vec[j] & FMAT)) ++j;
-		
-		bool need_refinement = false;
-		for (int k = i; k < j; ++k)
-			if ((cns_id_vec[k] & UNDS) || (cns_id_vec[k] & FDEL)) { need_refinement = true; break; }
-		if (need_refinement)
-		{
-			meap_cns_one_indel(i + start_soff, j + start_soff, cns_vec, cns_list[i].mat_cnt + cns_list[i].ins_cnt, aux_qstr, aux_tstr, cns);
-			if (cns.size() > 2) target.append(cns.data() + 1, cns.size() - 2);
+		const int start(i);
+		// advance to next matching coverage
+		for (++i; i < cns_list_size && !(cns_id_vec[i] & FMAT); ++i) { }
+		int need_refinement(0);
+		// check to see if anything in-between has questionable coverage
+		for (int k(start); k < i; ++k) {
+			if (cns_id_vec[k] & unds_or_fdel) {
+				need_refinement = 1;
+				break;
+			}
 		}
-		i = j;
+		if (need_refinement) {
+			meap_cns_one_indel(start + start_soff, i + start_soff, cns_vec, cns_list[start].mat_cnt + cns_list[start].ins_cnt, aux_qstr, aux_tstr, cns);
+			// trim first and last as they have good coverage
+			if (cns.size() > 2) {
+				target.append(cns.data() + 1, cns.size() - 2);
+			}
+		}
 	}
 }
 
-struct CmpMappingRangeBySoff
-{
-	bool operator()(const MappingRange& a, const MappingRange& b)
-	{
-		return (a.start == b.start) ? (a.end > b.end) : (a.start < b.start);
+struct CmpMappingRangeBySoff {
+	bool operator()(const MappingRange& a, const MappingRange& b) {
+		if (a.start != b.start) {
+			return a.start < b.start;
+		} else {
+			return b.end < a.end;
+		}
 	}
 };
 
-void 
-get_effective_ranges(std::vector<MappingRange>& mranges, std::vector<MappingRange>& eranges, const int read_size, const int min_size)
-{
+void get_effective_ranges(std::vector<MappingRange>& mranges, std::vector<MappingRange>& eranges, const int read_size, const int min_size) {
 	eranges.clear();
-	if (mranges.size() == 0) return;
-	std::vector<MappingRange>::iterator iter;
-	for (iter = mranges.begin(); iter != mranges.end(); ++iter)
-		if (iter->start <= 500 && read_size - iter->end <= 500)
-		{
+	if (mranges.size() == 0) {
+		return;
+	}
+	// see if any ranges are effectively the whole read
+	std::vector<MappingRange>::const_iterator a(mranges.begin());
+	const std::vector<MappingRange>::const_iterator end_a(mranges.end());
+	for (; a != end_a; ++a) {
+		if (a->start <= 500 && read_size - a->end <= 500) {
 			eranges.push_back(MappingRange(0, read_size));
 			return;
 		}
-
+	}
 	std::sort(mranges.begin(), mranges.end(), CmpMappingRangeBySoff());
-	const int nr = mranges.size();
-	int i = 0, j;
-	int left = mranges[i].start, right;
-	while (i < nr)
-	{
-		j = i + 1;
-		while (j < nr && mranges[j].end <= mranges[i].end) ++j;
-		if (j == nr)
-		{
-			right = mranges[i].end;
-			if (right - left >= min_size * 0.95) eranges.push_back(MappingRange(left, right));
+	const int nr(mranges.size());
+	// -1 so we can use > instead of >=
+	const int min_size_95(ceil(min_size * 0.95) - 1);
+	int i(0), left(mranges[0].start);
+	for (;;) {
+		const int right(mranges[i].end);
+		// include ranges we completely overlap
+		for (++i; i < nr && mranges[i].end <= right; ++i) { }
+		if (i == nr) {
+			if (right - left > min_size_95) {
+				eranges.push_back(MappingRange(left, right));
+			}
 			break;
 		}
-		if (mranges[i].end - mranges[j].start < 1000)
-		{
-			right = std::min(mranges[i].end, mranges[j].start);
-			if (right - left >= min_size * 0.95) eranges.push_back(MappingRange(left, right));
-			left = std::max(mranges[i].end, mranges[j].start);
+		// if the next non-contained range overlaps by 1k or more,
+		// treat as part of this range and keep extending
+		if (right - mranges[i].start < 1000) {
+			// truncate current range at overlap start
+			const int eff_right(std::min(right, mranges[i].start));
+			if (eff_right - left > min_size_95) {
+				eranges.push_back(MappingRange(left, eff_right));
+			}
+			// put some space between the effective ranges
+			left = std::max(right, mranges[i].start);
 		}
-		i = j;
 	}
 }
+
+// breaks output sequence into chunks of no more than MaxSeqSize (if needed);
+// split chunks will have an OvlpSize overlap
 
 void
 output_cns_result(std::vector<CnsResult>& cns_results,
 				  CnsResult& cr,
 				  const idx_t beg,
 				  const idx_t end,
-				  std::string& cns_seq) 
+				  const std::string& cns_seq) 
 {
 	const size_t MaxSeqSize = 60000;
 	const size_t OvlpSize = 10000;
@@ -199,103 +213,128 @@ check_ovlp_mapping_range(const int qb, const int qe, const int qs,
 	return oq >= qqs || os >= qss;
 }
 
-void
-consensus_worker(CnsTableItem* cns_table,
-				 uint1* id_list,
-				 CnsAlns& cns_vec,
-				 std::string& aux_qstr,
-				 std::string& aux_tstr,
-				 std::vector<MappingRange>& eranges,
-				 const int min_cov,
-				 const int min_size,
-				 const int read_id,
-				 std::vector<CnsResult>& cns_results)
-{
-	idx_t beg = 0, end;
+// look for areas of high coverage of about min_size or more,
+// improve them and stick on the results pile
+
+void consensus_worker(const CnsTableItem* const cns_table, uint1* const id_list, CnsAlns& cns_vec, std::string& aux_qstr, std::string& aux_tstr, const std::vector<MappingRange>& eranges, const int min_cov, const int min_size, const int read_id, std::vector<CnsResult>& cns_results) {
 	CnsResult cns_result;
-	std::string cns_seq;
 	cns_result.id = read_id;
-	std::vector<MappingRange>::iterator miter;
-	for (miter = eranges.begin(); miter != eranges.end(); ++miter)
-	{
-		int L = miter->start, R = miter->end;
-		beg = L;
-		while (beg < R)
-		{
-			while (beg < R && cns_table[beg].mat_cnt + cns_table[beg].ins_cnt < min_cov) ++beg;
-			end = beg + 1;
-			while (end < R && cns_table[end].mat_cnt + cns_table[end].ins_cnt >= min_cov) ++end;
-			if (end - beg >= 0.95 * min_size)
-			{
-				meap_consensus_one_segment(cns_table + beg, end - beg, id_list,
-										   beg, cns_vec, aux_qstr, aux_tstr, cns_seq, min_cov);
-				
-				if (cns_seq.size() >= min_size) output_cns_result(cns_results, cns_result, beg, end, cns_seq);
+	const idx_t min_size_95(ceil(0.95 * min_size));
+	std::string cns_seq;
+	std::vector<MappingRange>::const_iterator a(eranges.begin());
+	const std::vector<MappingRange>::const_iterator end_a(eranges.end());
+	for (; a != end_a; ++a) {
+		const int end_i(a->end);
+		for (idx_t i(a->start); i < end_i;) {
+			// find start of next high coverage area
+			for (; i < end_i && cns_table[i].mat_cnt + cns_table[i].ins_cnt < min_cov; ++i) { }
+			const idx_t start(i);
+			// find end of high coverage area
+			for (++i; i < end_i && cns_table[i].mat_cnt + cns_table[i].ins_cnt >= min_cov; ++i) { }
+			if (i - start >= min_size_95) {
+				meap_consensus_one_segment(cns_table + start, i - start, id_list, start, cns_vec, aux_qstr, aux_tstr, cns_seq, min_cov);
+				if (cns_seq.size() >= static_cast<size_t>(min_size)) {
+					output_cns_result(cns_results, cns_result, start, i, cns_seq);
+				}
 			}
-			
-			beg = end;
 		}
 	}
 }
 
-void
-consensus_one_read_m4_pacbio(ConsensusThreadData& ctd, ConsensusPerThreadData &pctd, const idx_t read_id, const idx_t sid, const idx_t eid)
-{
-	PackedDB& reads = ctd.reads;
-	ExtensionCandidate* overlaps = pctd.candidates;
-	DiffRunningData* drd_s = pctd.drd_s;
-	DiffRunningData* drd = NULL;
-	M5Record& m5 = pctd.m5;
-	CnsAlns& cns_vec = pctd.cns_alns;
-	std::vector<CnsResult>& cns_results = pctd.cns_results;
-	const idx_t read_size = overlaps[sid].ssize;
-	std::vector<char>& qstr = pctd.query;
-	std::vector<char>& tstr = pctd.target;
+// same as consensus_worker, but produces entire read as one entry;
+// uncorrected sections are just copied as is;
+
+void consensus_worker_one_read(const CnsTableItem* const cns_table, uint1* const id_list, CnsAlns& cns_vec, std::string& aux_qstr, std::string& aux_tstr, const std::vector<MappingRange>& eranges, const int min_cov, const int min_size, const int read_id, const std::vector<char>& tstr, std::vector<CnsResult>& cns_results) {
+	CnsResult cns_result;
+	cns_result.id = read_id;
+	const idx_t min_size_95(std::max<int>(ceil(0.95 * min_size), 1) - 1);
+	std::string cns_seq;
+	std::vector<MappingRange>::const_iterator a(eranges.begin());
+	const std::vector<MappingRange>::const_iterator end_a(eranges.end());
+	std::vector<MappingRange>::const_iterator last_a(eranges.end());
+	for (; a != end_a; last_a = a++) {
+		if (last_a != end_a) {		// add in-between range to cns_result
+			PackedDB::decode_and_append_sequence(cns_result.seq, tstr.data(), last_a->end, a->start);
+		} else if (a->start > 0) {	// add beginning of read
+			PackedDB::decode_and_append_sequence(cns_result.seq, tstr.data(), 0, a->start);
+		}
+		const int begin_i(a->start - 1);
+		const int end_i(a->end);
+		for (idx_t i(begin_i); i < end_i;) {
+			// find start of next high coverage area
+			const idx_t last_end(i != begin_i ? i : a->start);
+			for (++i; i < end_i && cns_table[i].mat_cnt + cns_table[i].ins_cnt < min_cov; ++i) { }
+			// add low coverage area as-is
+			PackedDB::decode_and_append_sequence(cns_result.seq, tstr.data(), last_end, i);
+			if (i == end_i) {
+				break;
+			}
+			const idx_t start(i);
+			// find end of high coverage area
+			for (++i; i < end_i && cns_table[i].mat_cnt + cns_table[i].ins_cnt >= min_cov; ++i) { }
+			if (i - start > min_size_95) {
+				meap_consensus_one_segment(cns_table + start, i - start, id_list, start, cns_vec, aux_qstr, aux_tstr, cns_seq, min_cov);
+				if (cns_seq.size() >= static_cast<size_t>(min_size)) {
+					// add corrected sequence
+					cns_result.seq += cns_seq;
+					continue;
+				}
+			}
+			// add uncorrected sequence
+			PackedDB::decode_and_append_sequence(cns_result.seq, tstr.data(), start, i);
+		}
+	}
+	// add end of read
+	if (last_a != end_a) {
+		PackedDB::decode_and_append_sequence(cns_result.seq, tstr.data(), last_a->end, tstr.size());
+	}
+	cns_result.range[0] = 0;
+	cns_result.range[1] = cns_result.seq.size();
+	cns_results.push_back(cns_result);
+}
+
+void consensus_one_read_m4_pacbio(ConsensusThreadData& ctd, ConsensusPerThreadData &pctd, const idx_t read_id, const idx_t sid, const idx_t eid) {
+	PackedDB& reads(ctd.reads);
+	ExtensionCandidate* overlaps(pctd.candidates);
+	DiffRunningData* const drd_s(pctd.drd_s);
+	DiffRunningData* drd(NULL);
+	M5Record& m5(pctd.m5);
+	CnsAlns& cns_vec(pctd.cns_alns);
+	std::vector<CnsResult>& cns_results(pctd.cns_results);
+	const idx_t read_size(overlaps[sid].ssize);
+	std::vector<char>& qstr(pctd.query);
+	std::vector<char>& tstr(pctd.target);
 	tstr.resize(read_size);
 	reads.GetSequence(read_id, true, tstr.data(), read_size);
-	std::string& nqstr = pctd.qaln;
-	std::string& ntstr = pctd.saln;
-	const int min_align_size = ctd.rco.min_align_size;
-	const int max_added = 60;
-
-	idx_t L, R;
-	if (eid - sid <= max_added)
-	{
-		L = sid;
-		R = eid;
-	}
-	else
-	{
-		L = sid;
-		R = L + max_added;    
-		std::sort(overlaps + sid, overlaps + eid, CompareOverlapByOverlapSize());
-	}
-
-	CnsTableItem* cns_table = pctd.cns_table;
+	std::string& nqstr(pctd.qaln);
+	std::string& ntstr(pctd.saln);
+	const int min_align_size(ctd.rco.min_align_size);
+	const int max_added(60);
+	CnsTableItem* cns_table(pctd.cns_table);
 	std::for_each(cns_table, cns_table + read_size, CnsTableItemCleaner());
 	cns_vec.clear();
-	for (idx_t i = L; i < R; ++i)
-	{
-		Overlap& ovlp = overlaps[i];
+	const idx_t L(sid);
+	const idx_t R(eid - sid <= max_added ? eid : L + max_added);
+	if (eid - sid > max_added) {	// only use largest max_added overlaps
+		std::sort(overlaps + sid, overlaps + eid, CompareOverlapByOverlapSize());
+	}
+	for (idx_t i(L); i < R; ++i) {
+		Overlap& ovlp(overlaps[i]);
 		qstr.resize(ovlp.qsize);
 		reads.GetSequence(ovlp.qid, ovlp.qdir == FWD, qstr.data(), ovlp.qsize);
-		idx_t qext = ovlp.qext;
-		idx_t sext = ovlp.sext;
-		if (ovlp.qdir == REV) qext = ovlp.qsize - 1 - qext;
+		const idx_t qext(ovlp.qdir == FWD ? ovlp.qext : ovlp.qsize - 1 - ovlp.qext);
+		const idx_t sext(ovlp.sext);
 		drd = drd_s;
-		bool r = GetAlignment(qstr.data(), qext, qstr.size(), tstr.data(), sext, tstr.size(), drd, m5, 0.15, min_align_size);
-		if (r)
-		{
+		const bool r(GetAlignment(qstr.data(), qext, qstr.size(), tstr.data(), sext, tstr.size(), drd, m5, 0.15, min_align_size));
+		if (r) {
 			normalize_gaps(m5qaln(m5), m5saln(m5), strlen(m5qaln(m5)), nqstr, ntstr, true);
 			meap_add_one_aln(nqstr, ntstr, m5soff(m5), cns_table, tstr.data());
 			cns_vec.add_aln(m5soff(m5), m5send(m5), nqstr, ntstr);
 		}
 	}
-	
 	std::vector<MappingRange> mranges, eranges;
 	cns_vec.get_mapping_ranges(mranges);
 	get_effective_ranges(mranges, eranges, read_size, ctd.rco.min_size);
-
 	consensus_worker(cns_table, pctd.id_list, cns_vec, nqstr, ntstr, eranges, ctd.rco.min_cov, ctd.rco.min_size, read_id, cns_results);
 }
 
@@ -409,10 +448,7 @@ void consensus_one_read_can_pacbio(ConsensusThreadData& ctd, ConsensusPerThreadD
 		qstr.resize(ec.qsize);
 		reads.GetSequence(ec.qid, ec.qdir == FWD, qstr.data(), ec.qsize);
 		const idx_t sext(ec.sext);
-		idx_t qext(ec.qext);
-		if (ec.qdir == REV) {
-			qext = ec.qsize - 1 - qext;
-		}
+		const idx_t qext(ec.qdir == FWD ? ec.qext : ec.qsize - 1 - ec.qext);
 		const bool r(GetAlignment(qstr.data(), qext, qstr.size(), tstr.data(), sext, tstr.size(), drd_s, m5, 0.15, min_align_size));
 		if (r && check_ovlp_mapping_range(m5qoff(m5), m5qend(m5), ec.qsize, m5soff(m5), m5send(m5), ec.ssize, min_mapping_ratio)) {
 			if (check_cov_stats(cov_stats, m5soff(m5), m5send(m5))) {
@@ -427,7 +463,11 @@ void consensus_one_read_can_pacbio(ConsensusThreadData& ctd, ConsensusPerThreadD
 	std::vector<MappingRange> mranges, eranges;
 	cns_vec.get_mapping_ranges(mranges);
 	get_effective_ranges(mranges, eranges, read_size, ctd.rco.min_size);
-	consensus_worker(cns_table, pctd.id_list, cns_vec, nqstr, ntstr, eranges, ctd.rco.min_cov, ctd.rco.min_size, read_id, cns_results);
+	if (ctd.rco.full_reads) {
+		consensus_worker_one_read(cns_table, pctd.id_list, cns_vec, nqstr, ntstr, eranges, ctd.rco.min_cov, ctd.rco.min_size, read_id, tstr, cns_results);
+	} else {
+		consensus_worker(cns_table, pctd.id_list, cns_vec, nqstr, ntstr, eranges, ctd.rco.min_cov, ctd.rco.min_size, read_id, cns_results);
+	}
 }
 
 void

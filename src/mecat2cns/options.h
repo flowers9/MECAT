@@ -27,6 +27,7 @@ struct ConsensusOptions
     int         job_index;
     int         reads_to_correct;
     int		grid_start_delay;
+    int		full_reads;
 };
 
 void

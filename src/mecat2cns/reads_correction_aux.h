@@ -209,7 +209,7 @@ class ConsensusThreadData {
 			}
 		}
 		pdata.next_candidate = i;
-		if (++num_threads_written_ <= rco.num_threads) {
+		if (++num_threads_written_ >= rco.num_threads) {
 			checkpoint();
 			num_threads_written_ = 0;
 		}

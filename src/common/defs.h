@@ -89,14 +89,14 @@ do { \
 do { \
     size_t __sm__sz__ = sizeof(type) * (count); \
     (arr) = (type *)malloc(__sm__sz__); \
-    if (!(arr)) ERROR("malloc fail"); \
+    if (!(arr)) ERROR("malloc fail: %lu * %lu = %lu", sizeof(type), size_t(count), __sm__sz__); \
 } while(0)
 
 #define safe_calloc(arr, type, count) \
 do { \
     size_t __sc__sz__ = sizeof(type) * (count); \
     (arr) = (type *)calloc(1, __sc__sz__); \
-    if (!(arr)) ERROR("calloc fail"); \
+    if (!(arr)) ERROR("calloc fail: %lu * %lu = %lu", sizeof(type), size_t(count), __sc__sz__); \
 } while(0)
 
 #define safe_realloc(arr, type, count) \
@@ -105,6 +105,7 @@ do { \
 	arr = (type *)realloc(arr, __sr__size__); \
 	if (!arr) \
 	{ \
+		ERROR("failed to realloc memory: %lu * %lu = %lu", sizeof(type), size_t(count), __sr__size__); \
 		ERROR("failed to realloc memory."); \
 		exit(1); \
 	} \

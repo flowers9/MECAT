@@ -14,14 +14,14 @@ static void* reads_correction_func_can(void* const arg) {
 	const int tid(data.get_thread_id());
 	ConsensusPerThreadData& pdata(data.data[tid]);
 	const ExtensionCandidate* const candidates(pdata.candidates);
-	const idx_t min_size(data.rco.min_size * 0.95);
+	const idx_t min_size(ceil(data.rco.min_size * 0.95));
 	const int tech_is_pacbio(data.rco.tech == TECH_PACBIO ? 1 : 0);
 	idx_t i(pdata.next_candidate);
 	while (i < pdata.num_candidates) {
 		const idx_t start(i);
 		const idx_t sid(candidates[start].sid);
 		for (++i; i < pdata.num_candidates && candidates[i].sid == sid; ++i) { }
-		if (i < start + data.rco.min_cov || candidates[start].ssize < min_size) {
+		if (i - start < data.rco.min_cov || candidates[start].ssize < min_size) {
 			continue;
 		}
 		if (tech_is_pacbio) {

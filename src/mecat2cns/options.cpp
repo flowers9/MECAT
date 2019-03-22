@@ -29,6 +29,7 @@ static int tech_nanopore		= TECH_NANOPORE;
 
 static int default_tech = TECH_PACBIO;
 static int num_partition_files = 0;
+static int full_reads = 0;
 
 static const char input_type_n    = 'i';
 static const char num_threads_n   = 't';
@@ -45,6 +46,7 @@ static const char grid_options_split_n = 'S';
 static const char job_index_n     = 'I';
 static const char reads_to_correct_n = 'R';
 static const char grid_start_delay_n = 'D';
+static const char full_reads_n    = 'F';
 
 void
 print_pacbio_default_options()
@@ -113,6 +115,9 @@ make_options(const ConsensusOptions& options)
 	if (options.grid_start_delay) {
 		cmd << " -" << grid_start_delay_n << " " << options.grid_start_delay;
 	}
+	if (options.full_reads) {
+		cmd << " -" << full_reads_n;
+	}
 	cmd << " " << options.m4;
 	cmd << " " << options.reads;
 	cmd << " " << options.corrected_reads;
@@ -138,6 +143,7 @@ void print_usage(const char* prog) {
 		<< "-" << grid_options_split_n << " <String>\toptions for split grid submission\n"
 		<< "-" << reads_to_correct_n << " <Integer>\tnumber of reads to correct [all]\n"
 		<< "-" << grid_start_delay_n << " <Integer>\tseconds to delay between starting grid jobs\n"
+		<< "-" << full_reads_n << "\t\toutput full reads, not just the corrected parts\n"
 		<< "-" << usage_n << "\t\tprint usage info.\n"
 		<< "\n"
 		<< "If 'x' is set to be '0' (pacbio), then the other options have the following default values: \n";
@@ -158,6 +164,7 @@ ConsensusOptions init_consensus_options(const int tech) {
 	t.job_index		= -1;
 	t.reads_to_correct	= 0;
 	t.grid_start_delay	= 0;
+	t.full_reads		= full_reads;
 	if (tech == TECH_PACBIO) {
 		t.input_type            = input_type_pacbio;
 		t.num_threads           = num_threads_pacbio;
@@ -216,7 +223,7 @@ int parse_arguments(int argc, char* argv[], ConsensusOptions& t) {
 	int opt_char;
 	char err_char;
 	opterr = 0;
-	while ((opt_char = getopt(argc, argv, "i:t:p:r:a:c:l:x:hG:I:n:R:S:D:k:")) != -1) {
+	while ((opt_char = getopt(argc, argv, "i:t:p:r:a:c:l:x:hG:I:n:R:S:D:k:F")) != -1) {
 		switch (opt_char) {
 			case input_type_n:
 				if (optarg[0] == '0') {
@@ -268,6 +275,9 @@ int parse_arguments(int argc, char* argv[], ConsensusOptions& t) {
 				break;
 			case num_partition_files_n:
 				t.num_partition_files = atoi(optarg);
+				break;
+			case full_reads_n:
+				t.full_reads = 1;
 				break;
 			case '?':
 				err_char = (char)optopt;
@@ -327,6 +337,7 @@ print_options(ConsensusOptions& t)
 	if (t.corrected_reads) std::cout << "m4\t" << t.corrected_reads << "\n";
 	if (t.grid_options) std::cout << "grid\t" << t.grid_options << "\n";
 	if (t.grid_options_split) std::cout << "grid_split\t" << t.grid_options_split << "\n";
+	if (t.full_reads) std::cout << "full reads\n";
 	std::cout << "number of threads:\t" << t.num_threads << "\n";
 	std::cout << "batch size:\t" << t.batch_size << "\n";
 	std::cout << "mapping ratio:\t" << t.min_mapping_ratio << "\n";
