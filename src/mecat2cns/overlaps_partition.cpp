@@ -22,12 +22,10 @@ inline static bool check_m4record_mapping_range(const M4Record& m4, const double
 	return query_is_contained(m4, min_cov_ratio) || subject_is_contained(m4, min_cov_ratio);
 }
 
-static void get_qualified_m4record_counts(const char* const m4_file_name, const double min_cov_ratio, idx_t& num_qualified_records, idx_t& num_reads) {
+static idx_t get_qualified_m4record_counts(const char* const m4_file_name, const double min_cov_ratio) {
 	std::ifstream in;
 	open_fstream(in, m4_file_name, std::ios::in);
-	num_qualified_records = 0;
-	num_reads = -1;
-	idx_t num_records(0);
+	idx_t num_reads(-1), num_records(0), num_qualified_records(0);
 	M4Record m4;
 	m4qext(m4) = m4sext(m4) = INVALID_IDX;
 	while (in >> m4) {
@@ -43,18 +41,20 @@ static void get_qualified_m4record_counts(const char* const m4_file_name, const 
 	}
 	close_fstream(in);
 	LOG(stderr, "there are %ld overlaps, %ld are qualified.", num_records, num_qualified_records);
-	++num_reads;
+	return num_reads + 1;
 }
 
-void get_repeat_reads(const char* const m4_file_name, const double min_cov_ratio, const idx_t num_reads, std::set<idx_t>& repeat_reads) {
-	const int MaxContained(100);
-	// used to increment to a max of MaxContained
-	char cnt_table[MaxContained + 1];
-	for (int i = 0; i < MaxContained; ++i) {
-		cnt_table[i] = i + 1;
+// not in use at the moment
+#if 0
+static void get_repeat_reads(const char* const m4_file_name, const double min_cov_ratio, const idx_t num_reads, std::set<idx_t>& repeat_reads) {
+	const int max_contained(100);
+	// used to increment to a max of max_contained
+	char count_table[max_contained + 1];
+	for (int i(0); i < max_contained; ++i) {
+		count_table[i] = i + 1;
 	}
-	cnt_table[MaxContained] = MaxContained;
-	std::vector<char> cnts(num_reads, 0);
+	count_table[max_contained] = max_contained;
+	std::vector<char> counts(num_reads, 0);
 	std::ifstream in;
 	open_fstream(in, m4_file_name, std::ios::in);
 	M4Record m4;
@@ -62,24 +62,25 @@ void get_repeat_reads(const char* const m4_file_name, const double min_cov_ratio
 	while (in >> m4) {
 		if (query_is_contained(m4, min_cov_ratio)) {
 			const idx_t qid = m4qid(m4);
-			// increments count
-			cnts[qid] = cnt_table[static_cast<int>(cnts[qid])];
+			// increments count up to max_contained
+			counts[qid] = count_table[static_cast<int>(counts[qid])];
 		}
 		if (subject_is_contained(m4, min_cov_ratio)) {
 			const idx_t sid = m4sid(m4);
-			// increments count
-			cnts[sid] = cnt_table[static_cast<int>(cnts[sid])];
+			// increments count up to max_contained
+			counts[sid] = count_table[static_cast<int>(counts[sid])];
 		}
 	}
 	close_fstream(in);
 	for (idx_t i(0); i < num_reads; ++i) {
-		if (cnts[i] == MaxContained) {
+		if (counts[i] == max_contained) {
 			std::cerr << "repeat read " << i << "\n";
 			repeat_reads.insert(i);
 		}
 	}
 	LOG(stderr, "number of repeat reads: %lu", repeat_reads.size());
 }
+#endif
 
 void generate_partition_index_file_name(const char* const m4_file_name, std::string& ret) {
 	ret = m4_file_name;
@@ -184,11 +185,10 @@ void partition_candidates(const char* input, const idx_t batch_size, const int m
 			}
 		}
 		for (int k(0); k < nf; ++k) {
-			if (prw.counts[k] == 0) {
-				continue;
-			}
-			idx_file << prw.file_names[k] << "\n";
 			fprintf(stderr, "%s contains %ld overlaps\n", prw.file_names[k].c_str(), prw.counts[k]);
+			if (prw.counts[k] != 0) {
+				idx_file << prw.file_names[k] << "\n";
+			}
 		}
 		prw.CloseFiles();
 	}
@@ -196,67 +196,56 @@ void partition_candidates(const char* input, const idx_t batch_size, const int m
 	prw.finalize();
 }
 
-void
-partition_m4records(const char* m4_file_name, const double min_cov_ratio, const idx_t batch_size, const int min_read_size, const int num_files)
-{
+void partition_m4records(const char* const m4_file_name, const double min_cov_ratio, const idx_t batch_size, const int min_read_size, const int num_files) {
 	DynamicTimer dtimer(__func__);
-	
-    idx_t num_reads, num_qualified_records;
-    get_qualified_m4record_counts(m4_file_name, min_cov_ratio, num_qualified_records, num_reads);
+	idx_t num_reads(get_qualified_m4record_counts(m4_file_name, min_cov_ratio));
 	std::set<idx_t> repeat_reads;
 	//get_repeat_reads(m4_file_name, min_cov_ratio, num_reads, repeat_reads);
-    const idx_t num_batches = (num_reads + batch_size - 1) / batch_size;
-    std::string idx_file_name;
-    generate_partition_index_file_name(m4_file_name, idx_file_name);
-    std::ofstream idx_file;
-    open_fstream(idx_file, idx_file_name.c_str(), std::ios::out);
-
-    M4Record m4, nm4;
+	const idx_t num_batches((num_reads + batch_size - 1) / batch_size);
+	std::string idx_file_name;
+	generate_partition_index_file_name(m4_file_name, idx_file_name);
+	std::ofstream idx_file;
+	open_fstream(idx_file, idx_file_name.c_str(), std::ios::out);
+	M4Record m4, nm4;
 	ExtensionCandidate ec;
-    PartitionResultsWriter<ExtensionCandidate> prw(num_files);
-    for (idx_t i = 0; i < num_batches; i += prw.kNumFiles)
-    {
-        const idx_t sfid = i;
-        const idx_t efid = std::min(sfid + prw.kNumFiles, num_batches);
-        const int nf = efid - sfid;
-        const idx_t L = batch_size * sfid;
-        const idx_t R = batch_size * efid;
-        std::ifstream in;
-        open_fstream(in, m4_file_name, std::ios::in);
+	PartitionResultsWriter<ExtensionCandidate> prw(num_files);
+	for (idx_t i(0); i < num_batches; i += prw.kNumFiles) {
+		const idx_t sfid(i);
+		const idx_t efid(std::min(sfid + prw.kNumFiles, num_batches));
+		const int nf(efid - sfid);
+		const idx_t L(batch_size * sfid);
+		const idx_t R(efid < num_batches ? batch_size * efid : prw.num_reads);
+		std::ifstream in;
+		open_fstream(in, m4_file_name, std::ios::in);
 		prw.OpenFiles(sfid, efid, m4_file_name, generate_partition_file_name, "partition.done");
-
-        while (in >> m4)
-        {
-			if (m4qsize(m4) < min_read_size || m4ssize(m4) < min_read_size) continue;
-            if (!check_m4record_mapping_range(m4, min_cov_ratio)) continue;
-			if (repeat_reads.find(m4qid(m4)) != repeat_reads.end()
-				||
-				repeat_reads.find(m4sid(m4)) != repeat_reads.end()) continue;
-			
-            if (m4qid(m4) >= L && m4qid(m4) < R)
-            {
-                normalize_m4record(m4, false, nm4);
+		while (in >> m4) {
+			if (m4qsize(m4) < min_read_size || m4ssize(m4) < min_read_size) {
+				continue;
+			} else if (!check_m4record_mapping_range(m4, min_cov_ratio)) {
+				continue;
+			} else if (repeat_reads.find(m4qid(m4)) != repeat_reads.end() || repeat_reads.find(m4sid(m4)) != repeat_reads.end()) {
+				continue;
+			}
+			if (m4qid(m4) >= L && m4qid(m4) < R) {
+				normalize_m4record(m4, false, nm4);
 				m4_to_candidate(nm4, ec);
-                prw.WriteOneResult((m4qid(m4) - L) / batch_size, m4qid(m4), ec);
-            }
-            if (m4sid(m4) >= L && m4sid(m4) < R)
-            {
-                normalize_m4record(m4, true, nm4);
+				prw.WriteOneResult((m4qid(m4) - L) / batch_size, m4qid(m4), ec);
+			}
+			if (m4sid(m4) >= L && m4sid(m4) < R) {
+				normalize_m4record(m4, true, nm4);
 				m4_to_candidate(nm4, ec);
-                prw.WriteOneResult((m4sid(m4) - L) / batch_size, m4sid(m4), ec);
-            }
-        }
-
-        for (int k = 0; k < nf; ++k)
-        {
-            if (prw.counts[k] == 0) continue;
-            idx_file << prw.file_names[k] << "\n";
+				prw.WriteOneResult((m4sid(m4) - L) / batch_size, m4sid(m4), ec);
+			}
+		}
+		for (int k(0); k < nf; ++k) {
 			fprintf(stderr, "%s contains %ld overlaps\n", prw.file_names[k].c_str(), prw.counts[k]);
-        }
-
-        prw.CloseFiles();
-    }
-    close_fstream(idx_file);
+			if (prw.counts[k] != 0) {
+				idx_file << prw.file_names[k] << "\n";
+			}
+		}
+		prw.CloseFiles();
+	}
+	close_fstream(idx_file);
 }
 
 void load_partition_files_info(const char* const idx_file_name, std::vector<std::string>& file_info_vec) {

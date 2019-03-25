@@ -9,7 +9,7 @@ class FastaReader {
 	typedef Sequence::str_t str_t;
 	typedef BufferLineReader::OneDataLine OneDataLine;
     public:
-	FastaReader(const char* fasta_file_name) : m_Reader(fasta_file_name), encode_table(get_dna_encode_table()) { }
+	explicit FastaReader(const char* const fasta_file_name) : m_Reader(fasta_file_name), encode_table(get_dna_encode_table()) { }
 	idx_t read_one_seq(Sequence& seq);
 	std::streampos tellg() const {
 		return m_Reader.tellg();
