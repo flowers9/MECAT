@@ -10,27 +10,26 @@ class PackedDB {
 		idx_t offset, size;
 	};
     public:
-	PackedDB() : pac(NULL), db_size(0), max_db_size(0) {}
+	PackedDB() : pac(NULL), db_size(0), max_db_size(0) { }
 	~PackedDB() {
 		destroy();
 	}
 	void reserve(const idx_t size) {
 		destroy();
 		max_db_size = size;
-		idx_t bytes = max_db_size / 4;
-		safe_calloc(pac, u1_t, bytes);
+		safe_calloc(pac, u1_t, (max_db_size + 3) / 4);
 	}
-	void GetSequence(const idx_t id, const bool fwd, char* const seq, const idx_t size) const {
+	void GetSequence(const idx_t id, const bool forward, char* const seq, const idx_t size) const {
 		r_assert(size == seq_idx[id].size);
-		if (fwd) {
+		if (forward) {
 			const idx_t offset(seq_idx[id].offset);
 			for (idx_t i(0); i < size; ++i) {
-				seq[i] = get_char(offset + i);
+				seq[i] = get_char(pac, offset + i);
 			}
 		} else {
 			const idx_t offset(seq_idx[id].offset + size - 1);
 			for (idx_t i(0); i < size; ++i) {
-				seq[i] = 3 - get_char(offset - i);
+				seq[i] = 3 - get_char(pac, offset - i);
 			}
 		}
 	}

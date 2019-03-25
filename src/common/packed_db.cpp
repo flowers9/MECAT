@@ -32,8 +32,8 @@ u1_t* PackedDB::load_pac(const char* path, idx_t& size) {
 void PackedDB::dump_idx(const PODArray<SeqIndex>& idx_list, const char* const path) {
 	std::ofstream out;
 	open_fstream(out, path, std::ios::out);
-	idx_t i(0), n(idx_list.size());
-	for (i = 0; i < n; ++i) {
+	const idx_t n(idx_list.size());
+	for (idx_t i(0); i < n; ++i) {
 		out << idx_list[i].offset << "\t" << idx_list[i].size << "\n";
 	}
 	close_fstream(out);
@@ -81,6 +81,7 @@ void PackedDB::pack_fasta_db(const char* const path, const char* const output_pr
 	std::ofstream iout;
 	open_fstream(iout, n.c_str(), std::ios::out);
 	Sequence read;
+	unsigned int rand_char(-1);
 	idx_t count(0), tsize(0);
 	for (;;) {
 		idx_t rsize(fr.read_one_seq(read));
@@ -90,10 +91,11 @@ void PackedDB::pack_fasta_db(const char* const path, const char* const output_pr
 			continue;
 		}
 		Sequence::str_t& s(read.sequence());
-		memset(buffer, 0, MAX_SEQ_SIZE);
+		// set_char uses | to set bits, so clear first
+		memset(buffer, 0, (rsize + 3) / 4);
 		for (idx_t i(0); i < rsize; ++i) {
 			const u1_t c(et[static_cast<int>(s[i])]);
-			set_char(buffer, i, c < 3 ? c : 3);
+			set_char(buffer, i, c < 4 ? c : ++rand_char & 3);
 		}
 		iout << tsize << "\t" << rsize << "\n";
 		rsize = (rsize + 3) / 4;
@@ -126,9 +128,10 @@ void PackedDB::add_one_seq(const Sequence& seq) {
 	}
 	const Sequence::str_t& org_seq(seq.sequence());
 	const u1_t* const table(get_dna_encode_table());
+	unsigned int rand_char(-1);
 	for (idx_t i(0); i < si.size; ++i, ++db_size) {
 		const u1_t c(table[static_cast<int>(org_seq[i])]);
-		set_char(db_size, c < 3 ? c : 3);
+		set_char(db_size, c < 4 ? c : ++rand_char & 3);
 	}
 }
 
@@ -149,9 +152,10 @@ void PackedDB::add_one_seq(const char* const seq, const idx_t size) {
 		max_db_size = new_size;
 	}
 	const u1_t* const table(get_dna_encode_table());
+	unsigned int rand_char(-1);
 	for (idx_t i(0); i < si.size; ++i, ++db_size) {
 		const u1_t c(table[static_cast<int>(seq[i])]);
-		set_char(db_size, c < 3 ? c : 3);
+		set_char(db_size, c < 4 ? c : ++rand_char & 3);
 	}
 }
 

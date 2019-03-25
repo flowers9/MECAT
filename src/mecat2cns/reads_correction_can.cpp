@@ -37,6 +37,7 @@ static void* reads_correction_func_can(void* const arg) {
 	return NULL;
 }
 
+// load and sort partition data, assign to threads, start threads
 static void consensus_one_partition_can(const char* const m4_file_name, const idx_t min_read_id, const idx_t max_read_id, ConsensusThreadData& data) {
 	idx_t nec;
 	ExtensionCandidate* const ec_list(load_partition_data<ExtensionCandidate>(m4_file_name, nec));
@@ -52,6 +53,7 @@ static void consensus_one_partition_can(const char* const m4_file_name, const id
 	delete[] ec_list;
 }
 
+// set up output file and thread data, handle restart if needed
 static int reads_correction_can_p(ReadsCorrectionOptions& rco, std::vector<PartitionFileInfo> &partition_file_vec, PackedDB& reads) {
 	const PartitionFileInfo& p(partition_file_vec[rco.job_index]);
 	std::ostringstream os;
@@ -61,8 +63,7 @@ static int reads_correction_can_p(ReadsCorrectionOptions& rco, std::vector<Parti
 	std::ofstream out;
 	ConsensusThreadData data(rco, reads, out, results_file.c_str());
 	off_t output_pos;
-	const int is_restart(data.restart(output_pos));
-	if (is_restart) {
+	if (data.restart(output_pos)) {					// is a restart
 		open_fstream(out, results_file_tmp.c_str(), std::ios::out | std::ios::in);
 		if (!out.seekp(output_pos)) {
 			ERROR("Restart failed: output file seek failed: %s", results_file_tmp.c_str());
@@ -79,6 +80,7 @@ static int reads_correction_can_p(ReadsCorrectionOptions& rco, std::vector<Parti
 	return 0;
 }
 
+// load reads, partition file index
 int reads_correction_can(ReadsCorrectionOptions& rco) {
 	std::string idx_file_name;
 	generate_partition_index_file_name(rco.m4, idx_file_name);
@@ -95,8 +97,7 @@ int reads_correction_can(ReadsCorrectionOptions& rco) {
 		std::ofstream out;
 		ConsensusThreadData data(rco, reads, out, rco.corrected_reads);
 		off_t output_pos;
-		const int is_restart(data.restart(output_pos));
-		if (is_restart) {
+		if (data.restart(output_pos)) {				// is a restart
 			open_fstream(out, rco.corrected_reads, std::ios::out | std::ios::in);
 			out.seekp(output_pos);
 			if (!out.seekp(output_pos)) {
