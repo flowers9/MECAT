@@ -81,7 +81,7 @@ void PackedDB::pack_fasta_db(const char* const path, const char* const output_pr
 	std::ofstream iout;
 	open_fstream(iout, n.c_str(), std::ios::out);
 	Sequence read;
-	unsigned int rand_char(-1);
+	unsigned int rand_char(-1);	// spread out unknown sequence in a repeatable fashion
 	idx_t count(0), tsize(0);
 	for (;;) {
 		idx_t rsize(fr.read_one_seq(read));
@@ -128,7 +128,7 @@ void PackedDB::add_one_seq(const Sequence& seq) {
 	}
 	const Sequence::str_t& org_seq(seq.sequence());
 	const u1_t* const table(get_dna_encode_table());
-	unsigned int rand_char(-1);
+	unsigned int rand_char(-1);	// spread out unknown sequence in a repeatable fashion
 	for (idx_t i(0); i < si.size; ++i, ++db_size) {
 		const u1_t c(table[static_cast<int>(org_seq[i])]);
 		set_char(db_size, c < 4 ? c : ++rand_char & 3);
@@ -152,7 +152,7 @@ void PackedDB::add_one_seq(const char* const seq, const idx_t size) {
 		max_db_size = new_size;
 	}
 	const u1_t* const table(get_dna_encode_table());
-	unsigned int rand_char(-1);
+	unsigned int rand_char(-1);	// spread out unknown sequence in a repeatable fashion
 	for (idx_t i(0); i < si.size; ++i, ++db_size) {
 		const u1_t c(table[static_cast<int>(seq[i])]);
 		set_char(db_size, c < 4 ? c : ++rand_char & 3);

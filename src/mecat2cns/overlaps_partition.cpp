@@ -10,62 +10,45 @@
 
 #define error_and_exit(msg) { std::cerr << msg << "\n"; abort(); }
 
-inline bool
-check_m4record_mapping_range(const M4Record& m4, const double min_cov_ratio)
-{
-    const idx_t qm = m4qend(m4) - m4qoff(m4);
-    const idx_t qs = m4qsize(m4) * min_cov_ratio;
-    const idx_t sm = m4send(m4) - m4soff(m4);
-    const idx_t ss = m4ssize(m4) * min_cov_ratio;
-    return qm >= qs || sm >= ss;
+inline static bool query_is_contained(const M4Record& m4, const double min_cov_ratio) {
+	return m4qend(m4) - m4qoff(m4) >= m4qsize(m4) * min_cov_ratio;
 }
 
-inline bool
-query_is_contained(const M4Record& m4, const double min_cov_ratio)
-{
-	const idx_t qm = m4qend(m4) - m4qoff(m4);
-    const idx_t qs = m4qsize(m4) * min_cov_ratio;
-	return qm >= qs;
+inline static bool subject_is_contained(const M4Record& m4, const double min_cov_ratio) {
+	return m4send(m4) - m4soff(m4) >= m4ssize(m4) * min_cov_ratio;
 }
 
-inline bool
-subject_is_contained(const M4Record& m4, const double min_cov_ratio)
-{
-	const idx_t sm = m4send(m4) - m4soff(m4);
-    const idx_t ss = m4ssize(m4) * min_cov_ratio;
-	return sm >= ss;
+inline static bool check_m4record_mapping_range(const M4Record& m4, const double min_cov_ratio) {
+	return query_is_contained(m4, min_cov_ratio) || subject_is_contained(m4, min_cov_ratio);
 }
 
-void
-get_qualified_m4record_counts(const char* m4_file_name, const double min_cov_ratio, idx_t& num_qualified_records, idx_t& num_reads)
-{
-    std::ifstream in;
-    open_fstream(in, m4_file_name, std::ios::in);
-    num_qualified_records = 0;
-    num_reads = -1;
-    idx_t num_records = 0;
-    M4Record m4;
+static void get_qualified_m4record_counts(const char* const m4_file_name, const double min_cov_ratio, idx_t& num_qualified_records, idx_t& num_reads) {
+	std::ifstream in;
+	open_fstream(in, m4_file_name, std::ios::in);
+	num_qualified_records = 0;
+	num_reads = -1;
+	idx_t num_records(0);
+	M4Record m4;
 	m4qext(m4) = m4sext(m4) = INVALID_IDX;
-    while (in >> m4)
-    {
-		if (m4qext(m4) == INVALID_IDX || m4sext(m4) == INVALID_IDX)
-		{
+	while (in >> m4) {
+		if (m4qext(m4) == INVALID_IDX || m4sext(m4) == INVALID_IDX) {
 			ERROR("no gapped start position is provided, please make sure that you have run \'meap_pairwise\' with option \'-g 1\'");
 		}
-        ++num_records;
-        if (check_m4record_mapping_range(m4, min_cov_ratio)) ++num_qualified_records;
-        num_reads = std::max(num_reads, m4qid(m4));
-        num_reads = std::max(num_reads, m4sid(m4));
-    }
-    close_fstream(in);
-
-	LOG(stderr, "there are %d overlaps, %d are qualified.", (int)num_records, (int)num_qualified_records);
-    ++num_reads;
+		++num_records;
+		if (check_m4record_mapping_range(m4, min_cov_ratio)) {
+			++num_qualified_records;
+		}
+		num_reads = std::max(num_reads, m4qid(m4));
+		num_reads = std::max(num_reads, m4sid(m4));
+	}
+	close_fstream(in);
+	LOG(stderr, "there are %ld overlaps, %ld are qualified.", num_records, num_qualified_records);
+	++num_reads;
 }
 
 void get_repeat_reads(const char* const m4_file_name, const double min_cov_ratio, const idx_t num_reads, std::set<idx_t>& repeat_reads) {
-	const int MaxContained = 100;
-	// used to imcrement to a max of MaxContained
+	const int MaxContained(100);
+	// used to increment to a max of MaxContained
 	char cnt_table[MaxContained + 1];
 	for (int i = 0; i < MaxContained; ++i) {
 		cnt_table[i] = i + 1;
@@ -80,48 +63,43 @@ void get_repeat_reads(const char* const m4_file_name, const double min_cov_ratio
 		if (query_is_contained(m4, min_cov_ratio)) {
 			const idx_t qid = m4qid(m4);
 			// increments count
-			cnts[qid] = cnt_table[int(cnts[qid])];
+			cnts[qid] = cnt_table[static_cast<int>(cnts[qid])];
 		}
 		if (subject_is_contained(m4, min_cov_ratio)) {
 			const idx_t sid = m4sid(m4);
 			// increments count
-			cnts[sid] = cnt_table[int(cnts[sid])];
+			cnts[sid] = cnt_table[static_cast<int>(cnts[sid])];
 		}
 	}
 	close_fstream(in);
-	for(idx_t i = 0; i < num_reads; ++i) {
-		if (cnts[i] >= MaxContained) {
+	for (idx_t i(0); i < num_reads; ++i) {
+		if (cnts[i] == MaxContained) {
 			std::cerr << "repeat read " << i << "\n";
 			repeat_reads.insert(i);
 		}
 	}
-	LOG(stderr, "number of repeat reads: %d", (int)repeat_reads.size());
+	LOG(stderr, "number of repeat reads: %lu", repeat_reads.size());
 }
 
-void generate_partition_index_file_name(const char* m4_file_name, std::string& ret) {
-    ret = m4_file_name;
-    ret += ".partition_files";
+void generate_partition_index_file_name(const char* const m4_file_name, std::string& ret) {
+	ret = m4_file_name;
+	ret += ".partition_files";
 }
 
-void
-generate_partition_file_name(const char* m4_file_name, const idx_t part, std::string& ret)
-{
-    ret = m4_file_name;
-    ret += ".part";
-    std::ostringstream os;
-    os << part;
-    ret += os.str();
+void generate_partition_file_name(const char* const m4_file_name, const idx_t part, std::string& ret) {
+	ret = m4_file_name;
+	ret += ".part";
+	std::ostringstream os;
+	os << part;
+	ret += os.str();
 }
 
-idx_t
-get_num_reads(const char* candidates_file)
-{
+static idx_t get_num_reads(const char* const candidates_file) {
 	std::ifstream in;
 	open_fstream(in, candidates_file, std::ios::in);
 	ExtensionCandidate ec;
-	int max_id = -1;
-	while (in >> ec)
-	{
+	int max_id(-1);
+	while (in >> ec) {
 		max_id = std::max(ec.qid, max_id);
 		max_id = std::max(ec.sid, max_id);
 	}
@@ -192,13 +170,13 @@ void partition_candidates(const char* input, const idx_t batch_size, const int m
 			}
 			// not set by >>
 			ec.qoff = ec.soff = ec.qend = ec.send = 0;
-			if (ec.qid >= L && ec.qid < R) {
+			if (L <= ec.qid && ec.qid < R) {
 				normalise_candidate(ec, nec, false);
 				if (prw.WriteOneResult((ec.qid - L) / batch_size, ec.qid, nec)) {
 					prw.checkpoint(in.tellg());
 				}
 			}
-			if (ec.sid >= L && ec.sid < R) {
+			if (L <= ec.sid && ec.sid < R) {
 				normalise_candidate(ec, nec, true);
 				if (prw.WriteOneResult((ec.sid - L) / batch_size, ec.sid, nec)) {
 					prw.checkpoint(in.tellg());
@@ -206,11 +184,11 @@ void partition_candidates(const char* input, const idx_t batch_size, const int m
 			}
 		}
 		for (int k(0); k < nf; ++k) {
-			if (prw.max_seq_ids[k] == std::numeric_limits<idx_t>::min()) {
+			if (prw.counts[k] == 0) {
 				continue;
 			}
-			idx_file << prw.file_names[k] << "\t" << prw.min_seq_ids[k] << "\t" << prw.max_seq_ids[k] << "\n";
-			fprintf(stderr, "%s contains reads %ld --- %ld\n", prw.file_names[k].c_str(), long(prw.min_seq_ids[k]), long(prw.max_seq_ids[k]));
+			idx_file << prw.file_names[k] << "\n";
+			fprintf(stderr, "%s contains %ld overlaps\n", prw.file_names[k].c_str(), prw.counts[k]);
 		}
 		prw.CloseFiles();
 	}
@@ -271,9 +249,9 @@ partition_m4records(const char* m4_file_name, const double min_cov_ratio, const 
 
         for (int k = 0; k < nf; ++k)
         {
-            if (prw.max_seq_ids[k] == std::numeric_limits<idx_t>::min()) continue;
-            idx_file << prw.file_names[k] << "\t" << prw.min_seq_ids[k] << "\t" << prw.max_seq_ids[k] << "\n";
-			fprintf(stderr, "%s contains reads %d --- %d\n", prw.file_names[k].c_str(), (int)prw.min_seq_ids[k], (int)prw.max_seq_ids[k]);
+            if (prw.counts[k] == 0) continue;
+            idx_file << prw.file_names[k] << "\n";
+			fprintf(stderr, "%s contains %ld overlaps\n", prw.file_names[k].c_str(), prw.counts[k]);
         }
 
         prw.CloseFiles();
@@ -281,17 +259,13 @@ partition_m4records(const char* m4_file_name, const double min_cov_ratio, const 
     close_fstream(idx_file);
 }
 
-void
-load_partition_files_info(const char* idx_file_name, std::vector<PartitionFileInfo>& file_info_vec)
-{
-    file_info_vec.clear();
-    std::ifstream in;
-    open_fstream(in, idx_file_name, std::ios::in);
-    PartitionFileInfo pfi;
-    while (in >> pfi.file_name)
-    {
-        in >> pfi.min_seq_id >> pfi.max_seq_id;
-        file_info_vec.push_back(pfi);
-    }
-    close_fstream(in);
+void load_partition_files_info(const char* const idx_file_name, std::vector<std::string>& file_info_vec) {
+	file_info_vec.clear();
+	std::ifstream in;
+	open_fstream(in, idx_file_name, std::ios::in);
+	std::string line;
+	while (in >> line) {
+		file_info_vec.push_back(line);
+	}
+	close_fstream(in);
 }

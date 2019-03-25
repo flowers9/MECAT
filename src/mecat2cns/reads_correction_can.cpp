@@ -1,7 +1,7 @@
 #include "reads_correction_can.h"
 
 #include <cstring>
-#include <string>
+#include <string>	// string
 #include <sstream>
 
 #include "MECAT_AlnGraphBoost.H"
@@ -38,7 +38,7 @@ static void* reads_correction_func_can(void* const arg) {
 }
 
 // load and sort partition data, assign to threads, start threads
-static void consensus_one_partition_can(const char* const m4_file_name, const idx_t min_read_id, const idx_t max_read_id, ConsensusThreadData& data) {
+static void consensus_one_partition_can(const char* const m4_file_name, ConsensusThreadData& data) {
 	idx_t nec;
 	ExtensionCandidate* const ec_list(load_partition_data<ExtensionCandidate>(m4_file_name, nec));
 	std::sort(ec_list, ec_list + nec, CmpExtensionCandidateBySidAndScore());
@@ -54,8 +54,8 @@ static void consensus_one_partition_can(const char* const m4_file_name, const id
 }
 
 // set up output file and thread data, handle restart if needed
-static int reads_correction_can_p(ReadsCorrectionOptions& rco, std::vector<PartitionFileInfo> &partition_file_vec, PackedDB& reads) {
-	const PartitionFileInfo& p(partition_file_vec[rco.job_index]);
+static int reads_correction_can_p(ReadsCorrectionOptions& rco, std::vector<std::string> &partition_file_vec, PackedDB& reads) {
+	const std::string& p(partition_file_vec[rco.job_index]);
 	std::ostringstream os;
 	os << rco.corrected_reads << "." << rco.job_index;
 	const std::string results_file(os.str());
@@ -72,9 +72,9 @@ static int reads_correction_can_p(ReadsCorrectionOptions& rco, std::vector<Parti
 		open_fstream(out, results_file_tmp.c_str(), std::ios::out);
 	}
 	char process_info[1024];
-	sprintf(process_info, "processing %s", p.file_name.c_str());
+	sprintf(process_info, "processing %s", p.c_str());
 	DynamicTimer dtimer(process_info);
-	consensus_one_partition_can(p.file_name.c_str(), p.min_seq_id, p.max_seq_id, data);
+	consensus_one_partition_can(p.c_str(), data);
 	close_fstream(out);
 	assert(rename(results_file_tmp.c_str(), results_file.c_str()) == 0);
 	return 0;
@@ -84,7 +84,7 @@ static int reads_correction_can_p(ReadsCorrectionOptions& rco, std::vector<Parti
 int reads_correction_can(ReadsCorrectionOptions& rco) {
 	std::string idx_file_name;
 	generate_partition_index_file_name(rco.m4, idx_file_name);
-	std::vector<PartitionFileInfo> partition_file_vec;
+	std::vector<std::string> partition_file_vec;
 	load_partition_files_info(idx_file_name.c_str(), partition_file_vec);
 	PackedDB reads;
 	reads.load_fasta_db(rco.reads);
@@ -109,10 +109,10 @@ int reads_correction_can(ReadsCorrectionOptions& rco) {
 		char process_info[1024];
 		const int job_end(partition_file_vec.size());
 		for (; rco.job_index < job_end; ++rco.job_index) {
-			const PartitionFileInfo& p(partition_file_vec[rco.job_index]);
-			sprintf(process_info, "processing %s", p.file_name.c_str());
+			const std::string& p(partition_file_vec[rco.job_index]);
+			sprintf(process_info, "processing %s", p.c_str());
 			DynamicTimer dtimer(process_info);
-			consensus_one_partition_can(p.file_name.c_str(), p.min_seq_id, p.max_seq_id, data);
+			consensus_one_partition_can(p.c_str(), data);
 		}
 		close_fstream(out);
 		assert(rename(tmp_file.c_str(), rco.corrected_reads) == 0);

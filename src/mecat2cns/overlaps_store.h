@@ -22,8 +22,7 @@ template <class T> class PartitionResultsWriter {
 	PODArray<T>* results;	// can't use vector<>, causes memory corruption
 	std::ofstream* files;	// can't use vector<>, non-copyable
 	std::vector<std::string> file_names;
-	std::vector<idx_t> min_seq_ids;
-	std::vector<idx_t> max_seq_ids;
+	std::vector<idx_t> counts;
     public:
 	// can't make kNumFiles static, as sysconf() is run-time only;
 	// leave room for stdin, stdout, stderr, a few others
@@ -63,8 +62,7 @@ template <class T> class PartitionResultsWriter {
 		delete[] results;
 		delete[] files;
 		file_names.clear();
-		min_seq_ids.clear();
-		max_seq_ids.clear();
+		counts.clear();
 		kStoreSize = num_open_files = 0;
 		results = 0;
 		files = 0;
@@ -80,8 +78,7 @@ template <class T> class PartitionResultsWriter {
 		unlink(std::string(done_file_ + ".ckpt").c_str());
 	}
 	int WriteOneResult(const int i, const idx_t seq_id, const T& r) {
-		min_seq_ids[i] = std::min(min_seq_ids[i], seq_id);
-		max_seq_ids[i] = std::max(max_seq_ids[i], seq_id);
+		++counts[i];
 		results[i].push_back(r);
 		if (results[i].size() == kStoreSize) {
 			write_buffer_to_disk(i);
@@ -108,7 +105,7 @@ template <class T> class PartitionResultsWriter {
 		allocate_data(prefix, fng, 1);
 		for (int i(0); i < num_open_files; ++i) {
 			off_t file_pos;
-			in >> file_pos >> min_seq_ids[i] >> max_seq_ids[i];
+			in >> file_pos >> counts[i];
 			if (!in) {
 				ERROR("Read error while restore checkpoint from %s (%d)", ckpt_file_.c_str(), i);
 			}
@@ -138,7 +135,7 @@ template <class T> class PartitionResultsWriter {
 				results[i].clear();
 			}
 			files[i].flush();
-			out << off_t(files[i].tellp()) << " " << min_seq_ids[i] << " " << max_seq_ids[i] << "\n";
+			out << off_t(files[i].tellp()) << " " << counts[i] << "\n";
 			if (!out) {
 				LOG(stderr, "Checkpoint failed: write failed: %s", ckpt_file_tmp_.c_str());
 				return;
@@ -170,8 +167,7 @@ template <class T> class PartitionResultsWriter {
 		kStoreSize = (1 << 30) / sizeof(T) / num_open_files;
 		results = new PODArray<T>[num_open_files];
 		file_names.assign(num_open_files, "");
-		min_seq_ids.assign(num_open_files, std::numeric_limits<idx_t>::max());
-		max_seq_ids.assign(num_open_files, std::numeric_limits<idx_t>::min());
+		counts.assign(num_open_files, 0);
 		files = new std::ofstream[num_open_files];
 		for (int i(0); i < num_open_files; ++i) {
 			fng(prefix.c_str(), i + batch_start_, file_names[i]);

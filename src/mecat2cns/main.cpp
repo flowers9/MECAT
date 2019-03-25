@@ -5,7 +5,7 @@
 
 #include <list>
 #include <sstream>
-#include <string>
+#include <string>	// string
 #include <vector>
 #include <unistd.h>	// ... unlink()
 #include <fcntl.h>	// S_IRUSR, S_IXUSR
@@ -124,7 +124,7 @@ int main(int argc, char** argv) {
 		// get number of partitions
 		std::string idx_file_name;
 		generate_partition_index_file_name(rco.m4, idx_file_name);
-		std::vector<PartitionFileInfo> partition_file_vec;
+		std::vector<std::string> partition_file_vec;
 		load_partition_files_info(idx_file_name.c_str(), partition_file_vec);
 		std::list<std::string> results;
 		for (size_t i(0); i != partition_file_vec.size(); ++i) {

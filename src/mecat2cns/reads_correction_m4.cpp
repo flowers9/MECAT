@@ -1,7 +1,7 @@
 #include "reads_correction_m4.h"
 
 #include <cstring>
-#include <string>
+#include <string>	// string
 #include <sstream>
 
 #include "mecat_correction.h"
@@ -50,7 +50,7 @@ void* reads_correction_func_m4(void* arg) {
 	return NULL;
 }
 
-void consensus_one_partition_m4(const char* m4_file_name, const idx_t min_read_id, const idx_t max_read_id, ReadsCorrectionOptions& rco, PackedDB& reads, std::ostream& out) {
+void consensus_one_partition_m4(const char* m4_file_name, ReadsCorrectionOptions& rco, PackedDB& reads, std::ostream& out) {
 	idx_t nec;
 	ExtensionCandidate* ec_list = load_partition_data<ExtensionCandidate>(m4_file_name, nec);
 	std::sort(ec_list, ec_list + nec, CmpExtensionCandidateBySidAndScore());
@@ -74,18 +74,18 @@ void consensus_one_partition_m4(const char* m4_file_name, const idx_t min_read_i
 	delete[] ec_list;
 }
 
-static int reads_correction_m4_p(ReadsCorrectionOptions& rco, std::vector<PartitionFileInfo> &partition_file_vec, PackedDB &reads) {
+static int reads_correction_m4_p(ReadsCorrectionOptions& rco, std::vector<std::string> &partition_file_vec, PackedDB &reads) {
 	std::ostringstream os;
 	os << rco.corrected_reads << "." << rco.job_index;
 	std::string results_file = os.str();
 	std::string working_file = results_file + ".working";
 	std::ofstream out;
 	open_fstream(out, working_file.c_str(), std::ios::out);
-	const PartitionFileInfo &p = partition_file_vec[rco.job_index];
+	const std::string &p = partition_file_vec[rco.job_index];
 	char process_info[1024];
-	sprintf(process_info, "processing %s", p.file_name.c_str());
+	sprintf(process_info, "processing %s", p.c_str());
 	DynamicTimer dtimer(process_info);
-	consensus_one_partition_m4(p.file_name.c_str(), p.min_seq_id, p.max_seq_id, rco, reads, out);
+	consensus_one_partition_m4(p.c_str(), rco, reads, out);
 	assert(rename(working_file.c_str(), results_file.c_str()) == 0);
 	return 0;
 }
@@ -93,7 +93,7 @@ static int reads_correction_m4_p(ReadsCorrectionOptions& rco, std::vector<Partit
 int reads_correction_m4(ReadsCorrectionOptions& rco) {
 	std::string idx_file_name;
 	generate_partition_index_file_name(rco.m4, idx_file_name);
-	std::vector<PartitionFileInfo> partition_file_vec;
+	std::vector<std::string> partition_file_vec;
 	load_partition_files_info(idx_file_name.c_str(), partition_file_vec);
 	PackedDB reads;
 	reads.load_fasta_db(rco.reads);
@@ -103,11 +103,11 @@ int reads_correction_m4(ReadsCorrectionOptions& rco) {
 		std::ofstream out;
 		open_fstream(out, rco.corrected_reads, std::ios::out);
 		char process_info[1024];
-		for (std::vector<PartitionFileInfo>::iterator iter = partition_file_vec.begin(); iter != partition_file_vec.end(); ++iter)
+		for (std::vector<std::string>::iterator iter = partition_file_vec.begin(); iter != partition_file_vec.end(); ++iter)
 		{
-			sprintf(process_info, "processing %s", iter->file_name.c_str());
+			sprintf(process_info, "processing %s", iter->c_str());
 			DynamicTimer dtimer(process_info);
-			consensus_one_partition_m4(iter->file_name.c_str(), iter->min_seq_id, iter->max_seq_id, rco, reads, out);
+			consensus_one_partition_m4(iter->c_str(), rco, reads, out);
 		}
 		
 		return 0;
