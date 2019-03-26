@@ -238,21 +238,14 @@ generate_idx_file_name(const char* wrk_dir, char* idx_file_name)
 	strcat(idx_file_name, "fileindex.txt");
 }
 
-void
-extract_one_seq(ifstream& pac_file, PackedDB::SeqIndex& si, u1_t* buffer, char* seq)
-{
-	idx_t offset = si.offset / 4;
-	idx_t bytes = (si.size + 3) / 4;
-	pac_file.seekg(offset, ios::beg);
-	memset(buffer, 0, MAX_SEQ_SIZE);
+void extract_one_seq(ifstream& pac_file, const idx_t offset, const idx_t size, u1_t* const buffer, char* const seq) {
+	const idx_t bytes((size + 3) / 4);
+	pac_file.seekg(offset / 4, ios::beg);
 	pac_file.read((char*)buffer, bytes);
-	const char* dt = get_dna_decode_table();
-	idx_t i = 0;
-	for(i = 0; i < si.size; ++i)
-	{
-		u1_t c = PackedDB::get_char(buffer, i);
-		c = dt[c];
-		seq[i] = c;
+	const char* const dt(get_dna_decode_table());
+	idx_t i(0);
+	for (; i < size; ++i) {
+		seq[i] = dt[PackedDB::get_char(buffer, i)];
 	}
 	seq[i] = '\0';
 }
@@ -413,10 +406,10 @@ split_dataset(const char* reads, const char* wrk_dir, int* num_vols)
 	char idx_file_name[PATH_MAX], vol_file_name[PATH_MAX];
 	generate_idx_file_name(wrk_dir, idx_file_name);
 	FILE* idx_file = fopen(idx_file_name, "w");
-	PackedDB::SeqIndex si;
-	while (in_idx_file >> si.offset >> si.size)
+	idx_t offset, size;
+	while (in_idx_file >> offset >> size)
 	{
-		if (v->curr + si.size + 1 > MCS)
+		if (v->curr + size + 1 > MCS)
 		{
 			v->start_read_id = rid;
 			rid += v->num_reads;
@@ -425,8 +418,8 @@ split_dataset(const char* reads, const char* wrk_dir, int* num_vols)
 			dump_volume(vol_file_name, v);
 			clear_volume_t(v);
 		}
-		extract_one_seq(pac_file, si, buffer, seq);
-		add_one_seq(v, seq, si.size);
+		extract_one_seq(pac_file, offset, size, buffer, seq);
+		add_one_seq(v, seq, size);
 		++v->curr;
 	}
 	
