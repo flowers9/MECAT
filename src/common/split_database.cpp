@@ -10,7 +10,6 @@
 #include <limits.h>	// PATH_MAX
 #include <unistd.h>	// unlink()
 
-#include "packed_db.h"
 #include "fasta_reader.h"
 
 #define MSS MAX_SEQ_SIZE
@@ -130,7 +129,7 @@ add_one_seq(volume_t* volume, const char* s, const int size)
 		int idx = volume->curr;
 		uint8_t c = s[i];
 		c = encode_table[c];
-		PackedDB::set_char(d, idx, c);
+		SET_CHAR(d, idx, c);
 		++volume->curr;
 	}
 }
@@ -145,7 +144,7 @@ extract_one_seq(const volume_t* v, const int id, char* s)
 	for (i = 0; i < size; ++i)
 	{
 		int k = offset + i;
-		s[i] = PackedDB::get_char(v->data, k);
+		s[i] = GET_CHAR(v->data, k);
 	}
 }
 
@@ -245,7 +244,7 @@ void extract_one_seq(ifstream& pac_file, const idx_t offset, const idx_t size, u
 	const char* const dt(get_dna_decode_table());
 	idx_t i(0);
 	for (; i < size; ++i) {
-		seq[i] = dt[PackedDB::get_char(buffer, i)];
+		seq[i] = dt[GET_CHAR(buffer, i)];
 	}
 	seq[i] = '\0';
 }
@@ -389,12 +388,13 @@ int split_raw_dataset(const char* reads, const char* wrk_dir) {
 void
 split_dataset(const char* reads, const char* wrk_dir, int* num_vols)
 {
-	string name;
-	PackedDB::generate_idx_name(reads, name);
+	std::string name(reads);
+	name += ".idx";
 	ifstream in_idx_file;
 	open_fstream(in_idx_file, name.c_str(), ios::in);
 	ifstream pac_file;
-	PackedDB::generate_pac_name(reads, name);
+	name = reads;
+	name += ".pac";
 	open_fstream(pac_file, name.c_str(), ios::in | ios::binary);
 	u1_t* buffer;
 	char* seq;

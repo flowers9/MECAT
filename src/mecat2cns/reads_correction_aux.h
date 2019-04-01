@@ -6,7 +6,7 @@
 #include <unistd.h>
 
 #include "dw.h"
-#include "../common/packed_db.h"
+#include "packed_db.h"
 #include "options.h"
 
 struct CnsTableItem
@@ -172,12 +172,13 @@ class ConsensusThreadData {
 	PackedDB& reads;
 	std::ostream& out;
 	pthread_mutex_t out_lock;
+	idx_t ec_offset;
 	// this doesn't work as a vector - all the pointers end up pointing
 	// to the same values, and eventually it seg faults (probably a
 	// compiler optimization bug)
 	ConsensusPerThreadData* data;
     public:
-	ConsensusThreadData(ReadsCorrectionOptions& prco, PackedDB& r, std::ostream& output, const char* const input_file_name) : rco(prco), reads(r), out(output), data(new ConsensusPerThreadData[prco.num_threads]), last_thread_id_(-1), num_threads_written_(0) {
+	ConsensusThreadData(ReadsCorrectionOptions& prco, PackedDB& r, std::ostream& output, const char* const input_file_name) : rco(prco), reads(r), out(output), ec_offset(0), data(new ConsensusPerThreadData[prco.num_threads]), last_thread_id_(-1), num_threads_written_(0) {
 		done_file_ = input_file_name;
 		done_file_ += ".done";
 		ckpt_file_ = input_file_name;
@@ -196,6 +197,12 @@ class ConsensusThreadData {
 		const int tid(++last_thread_id_);
 		pthread_mutex_unlock(&id_lock_);
 		return tid;
+	}
+	void reset_threads() {
+		last_thread_id_ = -1;
+		for (int i(0); i < rco.num_threads; ++i) {
+			data[i].next_candidate = 0;
+		}
 	}
 	void write_buffer(const int tid, const idx_t i) {
 		ConsensusPerThreadData& pdata(data[tid]);
@@ -227,7 +234,7 @@ class ConsensusThreadData {
 		if (!ckpt_in) {
 			ERROR("Restart failed: could not open checkpoint file: %s", ckpt_file_.c_str());
 		}
-		ckpt_in >> rco.job_index >> output_pos;
+		ckpt_in >> rco.job_index >> output_pos >> ec_offset;
 		if (!ckpt_in) {
 			ERROR("Restart failed: could not read checkpoint file: %s", ckpt_file_.c_str());
 		}
@@ -247,7 +254,7 @@ class ConsensusThreadData {
 			return;
 		}
 		out.flush();
-		ckpt_out << rco.job_index << " " << off_t(out.tellp()) << "\n";
+		ckpt_out << rco.job_index << " " << off_t(out.tellp()) << " " << ec_offset << "\n";
 		if (!ckpt_out) {
 			LOG(stderr, "Checkpoint failed: write failed: %s", ckpt_file_tmp_.c_str());
 			return;

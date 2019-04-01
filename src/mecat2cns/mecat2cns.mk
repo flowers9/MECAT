@@ -16,6 +16,7 @@ SOURCES  := main.cpp \
 	reads_correction_aux.cpp \
 	reads_correction_can.cpp \
 	reads_correction_m4.cpp \
+	packed_db.cpp \
 
 SRC_INCDIRS  := . libboost
 

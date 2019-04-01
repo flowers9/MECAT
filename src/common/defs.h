@@ -19,7 +19,7 @@ typedef uint64_t    u8_t;
 typedef i8_t        idx_t;
 
 typedef u1_t		uint1;
-typedef idx_t		index_t;
+//typedef idx_t		index_t;	// solaris conflict
 
 #define INVALID_IDX (-1)
 

@@ -3,7 +3,8 @@
 
 #include "../common/defs.h"
 
-#define MCS (2140000000L) // max chunk size
+// max chunk size
+#define MCS (2140000000L)
 //#define MCS 50000000L
 
 typedef struct {
@@ -22,6 +23,10 @@ typedef struct {
     uint8_t* data;
     offset_list_t* offset_list;
 } volume_t;
+
+// moved from PackedDB
+#define SET_CHAR(p,i,c) ((p)[(i) >> 2] |= (c) << ((~(i) & 3) << 1))
+#define GET_CHAR(p,i)   ((p)[(i) >> 2] >> ((~(i) & 3) << 1) & 3)
 
 volume_t*
 new_volume_t(int num_reads, int num_bases, int no_allocate = 0);

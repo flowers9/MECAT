@@ -14,7 +14,6 @@ SOURCES      := common/alignment.cpp \
 		common/fasta_reader.cpp \
 		common/gapalign.cpp \
 		common/lookup_table.cpp \
-		common/packed_db.cpp \
 		common/sequence.cpp \
 		common/split_database.cpp \
 		common/xdrop_gapalign.cpp

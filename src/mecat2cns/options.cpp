@@ -30,6 +30,7 @@ static int tech_nanopore		= TECH_NANOPORE;
 static int default_tech = TECH_PACBIO;
 static int num_partition_files = 0;
 static int full_reads = 0;
+static idx_t read_buffer_size = 0;
 
 static const char input_type_n    = 'i';
 static const char num_threads_n   = 't';
@@ -47,6 +48,7 @@ static const char job_index_n     = 'I';
 static const char reads_to_correct_n = 'R';
 static const char grid_start_delay_n = 'D';
 static const char full_reads_n    = 'F';
+static const char read_buffer_size_n = 'b';
 
 void
 print_pacbio_default_options()
@@ -118,6 +120,9 @@ make_options(const ConsensusOptions& options)
 	if (options.full_reads) {
 		cmd << " -" << full_reads_n;
 	}
+	if (options.read_buffer_size) {
+		cmd << " -" << read_buffer_size_n << " " << options.read_buffer_size;
+	}
 	cmd << " " << options.m4;
 	cmd << " " << options.reads;
 	cmd << " " << options.corrected_reads;
@@ -144,7 +149,8 @@ void print_usage(const char* prog) {
 		<< "-" << reads_to_correct_n << " <Integer>\tnumber of reads to correct [all]\n"
 		<< "-" << grid_start_delay_n << " <Integer>\tseconds to delay between starting grid jobs\n"
 		<< "-" << full_reads_n << "\t\toutput full reads, not just the corrected parts\n"
-		<< "-" << usage_n << "\t\tprint usage info.\n"
+		<< "-" << read_buffer_size_n << " <Integer>\tbytes of memory to buffer reads [no buffer]\n"
+		<< "-" << usage_n << "\t\tprint usage info\n"
 		<< "\n"
 		<< "If 'x' is set to be '0' (pacbio), then the other options have the following default values: \n";
 	print_pacbio_default_options();
@@ -165,6 +171,7 @@ ConsensusOptions init_consensus_options(const int tech) {
 	t.reads_to_correct	= 0;
 	t.grid_start_delay	= 0;
 	t.full_reads		= full_reads;
+	t.read_buffer_size	= read_buffer_size;
 	if (tech == TECH_PACBIO) {
 		t.input_type            = input_type_pacbio;
 		t.num_threads           = num_threads_pacbio;
@@ -223,7 +230,7 @@ int parse_arguments(int argc, char* argv[], ConsensusOptions& t) {
 	int opt_char;
 	char err_char;
 	opterr = 0;
-	while ((opt_char = getopt(argc, argv, "i:t:p:r:a:c:l:x:hG:I:n:R:S:D:k:F")) != -1) {
+	while ((opt_char = getopt(argc, argv, "i:t:p:r:a:c:l:x:hG:I:n:R:S:D:k:Fb:")) != -1) {
 		switch (opt_char) {
 			case input_type_n:
 				if (optarg[0] == '0') {
@@ -279,6 +286,9 @@ int parse_arguments(int argc, char* argv[], ConsensusOptions& t) {
 			case full_reads_n:
 				t.full_reads = 1;
 				break;
+			case read_buffer_size_n:
+				t.read_buffer_size = atoll(optarg);
+				break;
 			case '?':
 				err_char = (char)optopt;
 				fprintf(stderr, "unrecognised option '%c'\n", err_char);
@@ -319,6 +329,10 @@ int parse_arguments(int argc, char* argv[], ConsensusOptions& t) {
 		std::cerr << "grid start delay must be >= 0\n";
 		parse_success = false;
 	}
+	if (t.read_buffer_size < 0) {
+		std::cerr << "read buffer size must be greater than 0\n";
+		parse_success = false;
+	}
 	if (argc - optind < 3) {
 		return 1;
 	}
@@ -338,6 +352,7 @@ print_options(ConsensusOptions& t)
 	if (t.grid_options) std::cout << "grid\t" << t.grid_options << "\n";
 	if (t.grid_options_split) std::cout << "grid_split\t" << t.grid_options_split << "\n";
 	if (t.full_reads) std::cout << "full reads\n";
+	if (t.read_buffer_size) std::cout << "read_buffer_size\t" << t.read_buffer_size << "\n";
 	std::cout << "number of threads:\t" << t.num_threads << "\n";
 	std::cout << "batch size:\t" << t.batch_size << "\n";
 	std::cout << "mapping ratio:\t" << t.min_mapping_ratio << "\n";

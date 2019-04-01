@@ -5,7 +5,6 @@
 #include "pw_options.h"
 #include "../common/diff_gapalign.h"
 #include "../common/xdrop_gapalign.h"
-#include "../common/packed_db.h"
 #include "../common/lookup_table.h"
 #include "pw_impl.h"
 

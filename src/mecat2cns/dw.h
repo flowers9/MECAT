@@ -5,7 +5,6 @@
 
 #include "../common/alignment.h"
 #include "../common/defs.h"
-#include "../common/packed_db.h"
 
 namespace ns_banded_sw {
 

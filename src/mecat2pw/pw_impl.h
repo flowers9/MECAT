@@ -2,7 +2,6 @@
 #define PW_IMPL_H
 
 #include "../common/alignment.h"
-#include "../common/packed_db.h"
 #include "../common/lookup_table.h"
 
 #include "pw_options.h"	// options_t

@@ -1,5 +1,5 @@
 #include "lookup_table.h"
-#include "packed_db.h"
+#include "split_database.h"
 
 #include <cstdio>
 
@@ -41,7 +41,7 @@ fill_ref_index_offsets_func(void* arg)
 		for (j = 0; j < read_size; ++j)
 		{
 			int k = read_start + j;
-			uint8_t c = PackedDB::get_char(v->data, k);
+			uint8_t c = GET_CHAR(v->data, k);
 			eit = (eit << 2) | c;
 			assert(eit < index_count);
 			if (j >= kmer_size - 1)
@@ -78,7 +78,7 @@ create_ref_index(volume_t* v, int kmer_size, int num_threads)
 		for (int j = 0; j < read_size; ++j)
 		{
 			int k = read_start + j;
-			uint8_t c = PackedDB::get_char(v->data, k);
+			uint8_t c = GET_CHAR(v->data, k);
 			assert(c>= 0 && c < 4);
 			eit = (eit << 2) | c;
 			if (j >= kmer_size - 1)

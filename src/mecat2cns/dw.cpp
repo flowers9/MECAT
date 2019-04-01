@@ -1,4 +1,5 @@
 #include "dw.h"
+#include <string.h>	// memcpy(), memset()
 
 namespace ns_banded_sw {
 

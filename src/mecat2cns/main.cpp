@@ -2,6 +2,7 @@
 #include "reads_correction_m4.h"
 #include "overlaps_partition.h"
 #include "options.h"
+#include "packed_db.h"			// PackedDB
 
 #include <list>
 #include <sstream>
@@ -105,6 +106,7 @@ int main(int argc, char** argv) {
 			wait_for_files(partition_results);
 		} else {
 			if (rco.input_type == INPUT_TYPE_CAN) {
+				PackedDB::convert_fasta_to_db(rco.reads, "fasta.db", rco.min_size);
 				partition_candidates(rco.m4, rco.batch_size, rco.min_size, rco.num_partition_files, rco.reads_to_correct);
 			} else {
 				partition_m4records(rco.m4, rco.min_mapping_ratio - 0.02, rco.batch_size, rco.min_size, rco.num_partition_files);

@@ -17,10 +17,10 @@ static void* reads_correction_func_can(void* const arg) {
 	const idx_t min_size(ceil(data.rco.min_size * 0.95));
 	const int tech_is_pacbio(data.rco.tech == TECH_PACBIO ? 1 : 0);
 	idx_t i(pdata.next_candidate);
-	while (i < pdata.num_candidates) {
+	while (i != pdata.num_candidates) {
 		const idx_t start(i);
 		const idx_t sid(candidates[start].sid);
-		for (++i; i < pdata.num_candidates && candidates[i].sid == sid; ++i) { }
+		for (++i; i != pdata.num_candidates && candidates[i].sid == sid; ++i) { }
 		if (i - start < data.rco.min_cov || candidates[start].ssize < min_size) {
 			continue;
 		}
@@ -37,18 +37,88 @@ static void* reads_correction_func_can(void* const arg) {
 	return NULL;
 }
 
+class EC_Index {
+    public:
+	idx_t offset, count;
+	explicit EC_Index() : offset(0), count(0) { }
+	explicit EC_Index(idx_t i, idx_t j) : offset(i), count(j) { }
+	~EC_Index() { }
+};
+
+// reorder list so reads are more concentrated and we can process more
+// ecs per pass, with limited read space
+
+static ExtensionCandidate* reorder_candidates(ExtensionCandidate* const ec_list, const idx_t nec, const idx_t num_reads) {
+	ExtensionCandidate* new_list(new ExtensionCandidate[nec]);
+	std::vector<EC_Index> index(num_reads);
+	// index existing list by sid
+	for (idx_t i(0); i != nec;) {
+		const idx_t start(i);
+		const idx_t sid(ec_list[i].sid);
+		for (++i; i != nec && ec_list[i].sid == sid; ++i) { }
+		index[sid] = EC_Index(start, i - start);
+	}
+	// generate the new read order
+	std::vector<char> used(index.size(), 0);
+	std::vector<idx_t> new_order;
+	new_order.reserve(index.size());
+	idx_t next_unused(0), next_search(0);
+	for (;;) {
+		// skip over used reads, reads with no alignments
+		for (; static_cast<size_t>(next_unused) != used.size() && (used[next_unused] || index[next_unused].count == 0); ++next_unused) { }
+		if (static_cast<size_t>(next_unused) == used.size()) {
+			break;
+		}
+		used[next_unused] = 1;
+		new_order.push_back(next_unused);
+		// add all reads aligned to, and aligned to those, and so on
+		for (; static_cast<size_t>(next_search) != new_order.size(); ++next_search) {
+			const idx_t sid(new_order[next_search]);
+			idx_t i(index[sid].offset);
+			const idx_t end_i(i + index[sid].count);
+			for (; i != end_i; ++i) {
+				const idx_t qid(ec_list[i].qid);
+				if (!used[qid]) {
+					used[qid] = 1;
+					new_order.push_back(qid);
+				}
+			}
+		}
+	}
+	// copy over the ecs to the new list in the new order
+	idx_t pos(0);
+	std::vector<idx_t>::const_iterator a(new_order.begin());
+	const std::vector<idx_t>::const_iterator end_a(new_order.end());
+	for (; a != end_a; ++a) {
+		const EC_Index& b(index[*a]);
+		memcpy(new_list + pos, ec_list + b.offset, sizeof(ExtensionCandidate) * b.count);
+		pos += b.count;
+	}
+	delete[] ec_list;
+	return new_list;
+}
+
 // load and sort partition data, assign to threads, start threads
 static void consensus_one_partition_can(const char* const m4_file_name, ConsensusThreadData& data) {
 	idx_t nec;
-	ExtensionCandidate* const ec_list(load_partition_data<ExtensionCandidate>(m4_file_name, nec));
+	ExtensionCandidate* ec_list(load_partition_data<ExtensionCandidate>(m4_file_name, nec));
 	std::sort(ec_list, ec_list + nec, CmpExtensionCandidateBySidAndScore());
-	allocate_ecs(data, ec_list, nec);
+	ec_list = reorder_candidates(ec_list, nec, data.reads.num_reads());
 	pthread_t thread_ids[data.rco.num_threads];
-	for (int i(0); i < data.rco.num_threads; ++i) {
-		pthread_create(&thread_ids[i], NULL, reads_correction_func_can, static_cast<void*>(&data));
-	}
-	for (int i(0); i < data.rco.num_threads; ++i) {
-		pthread_join(thread_ids[i], NULL);
+	while (data.ec_offset != nec) {
+		// see how many candidates we can run, given
+		// how much read sequence we can load into memory
+		const idx_t ecs(data.reads.load_reads(ec_list + data.ec_offset, nec - data.ec_offset));
+		allocate_ecs(data, ec_list + data.ec_offset, ecs);
+		for (int i(0); i != data.rco.num_threads; ++i) {
+			pthread_create(&thread_ids[i], NULL, reads_correction_func_can, static_cast<void*>(&data));
+		}
+		for (int i(0); i != data.rco.num_threads; ++i) {
+			pthread_join(thread_ids[i], NULL);
+		}
+		// don't update offset before threading to prevent checkpointing with new value
+		data.ec_offset += ecs;
+		data.reset_threads();
 	}
 	delete[] ec_list;
 }
@@ -87,7 +157,8 @@ int reads_correction_can(ReadsCorrectionOptions& rco) {
 	std::vector<std::string> partition_file_vec;
 	load_partition_files_info(idx_file_name.c_str(), partition_file_vec);
 	PackedDB reads;
-	reads.load_fasta_db(rco.reads);
+	//reads.load_fasta_db(rco.reads);
+	reads.open_db("fasta.db", rco.read_buffer_size);
 	if (rco.job_index != -1) {
 		return reads_correction_can_p(rco, partition_file_vec, reads);
 	} else {
@@ -108,7 +179,7 @@ int reads_correction_can(ReadsCorrectionOptions& rco) {
 		}
 		char process_info[1024];
 		const int job_end(partition_file_vec.size());
-		for (; rco.job_index < job_end; ++rco.job_index) {
+		for (; rco.job_index != job_end; ++rco.job_index) {
 			const std::string& p(partition_file_vec[rco.job_index]);
 			sprintf(process_info, "processing %s", p.c_str());
 			DynamicTimer dtimer(process_info);

@@ -241,6 +241,13 @@ void consensus_worker(const CnsTableItem* const cns_table, uint1* const id_list,
 	}
 }
 
+static void decode_and_append_sequence(std::string& s, const char* const seq, idx_t i, const idx_t end_i) {
+	s.reserve(s.size() + end_i - i);
+	for (; i < end_i; ++i) {
+		s += "ACGT"[static_cast<int>(seq[i])];
+	}
+}
+
 // same as consensus_worker, but produces entire read as one entry;
 // uncorrected sections are just copied as is;
 
@@ -254,9 +261,9 @@ void consensus_worker_one_read(const CnsTableItem* const cns_table, uint1* const
 	std::vector<MappingRange>::const_iterator last_a(eranges.end());
 	for (; a != end_a; last_a = a++) {
 		if (last_a != end_a) {		// add in-between range to cns_result
-			PackedDB::decode_and_append_sequence(cns_result.seq, tstr.data(), last_a->end, a->start);
+			decode_and_append_sequence(cns_result.seq, tstr.data(), last_a->end, a->start);
 		} else if (a->start > 0) {	// add beginning of read
-			PackedDB::decode_and_append_sequence(cns_result.seq, tstr.data(), 0, a->start);
+			decode_and_append_sequence(cns_result.seq, tstr.data(), 0, a->start);
 		}
 		const int begin_i(a->start - 1);
 		const int end_i(a->end);
@@ -265,7 +272,7 @@ void consensus_worker_one_read(const CnsTableItem* const cns_table, uint1* const
 			const idx_t last_end(i != begin_i ? i : a->start);
 			for (++i; i < end_i && cns_table[i].mat_cnt + cns_table[i].ins_cnt < min_cov; ++i) { }
 			// add low coverage area as-is
-			PackedDB::decode_and_append_sequence(cns_result.seq, tstr.data(), last_end, i);
+			decode_and_append_sequence(cns_result.seq, tstr.data(), last_end, i);
 			if (i == end_i) {
 				break;
 			}
@@ -281,12 +288,12 @@ void consensus_worker_one_read(const CnsTableItem* const cns_table, uint1* const
 				}
 			}
 			// add uncorrected sequence
-			PackedDB::decode_and_append_sequence(cns_result.seq, tstr.data(), start, i);
+			decode_and_append_sequence(cns_result.seq, tstr.data(), start, i);
 		}
 	}
 	// add end of read
 	if (last_a != end_a) {
-		PackedDB::decode_and_append_sequence(cns_result.seq, tstr.data(), last_a->end, tstr.size());
+		decode_and_append_sequence(cns_result.seq, tstr.data(), last_a->end, tstr.size());
 	}
 	cns_result.range[0] = 0;
 	cns_result.range[1] = cns_result.seq.size();
