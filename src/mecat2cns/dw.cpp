@@ -389,14 +389,14 @@ int dw(const char* query, const int query_size, const int query_start, const cha
 	const char* encode2char("ACGT-");
 	for (k = result->left_store_size - 1, i = 0, j = 0; -1 < k; --k, ++idx) {
 		unsigned char ch(result->left_store1[k]);
-		r_assert(ch >= 0 && ch <= 4);
+		r_assert(ch <= 4);
 		ch = encode2char[ch];
 		result->out_store1[idx] = ch;
 		if (ch != '-') {
 			++i;
 		}
 		ch = result->left_store2[k];
-		r_assert(ch >= 0 && ch <= 4);
+		r_assert(ch <= 4);
 		ch = encode2char[ch];
 		result->out_store2[idx] = ch;
 		if (ch != '-') {
@@ -406,20 +406,20 @@ int dw(const char* query, const int query_size, const int query_start, const cha
 	result->query_start = query_start - i;
 	if (result->query_start < 0) {
 		std::cerr << "query_start = " << query_start << ", i = " << i << "\n";
+		r_assert(result->query_start >= 0);
 	}
-	r_assert(result->query_start >= 0);
 	result->target_start = target_start - j;
 	r_assert(result->target_start >= 0);
 	for (k = 0, i = 0, j = 0; k < result->right_store_size; ++k, ++idx) {
 		unsigned char ch(result->right_store1[k]);
-		r_assert(ch >= 0 && ch <= 4);
+		r_assert(ch <= 4);
 		ch = encode2char[ch];
 		result->out_store1[idx] = ch;
 		if (ch != '-') {
 			++i;
 		}
 		ch = result->right_store2[k];
-		r_assert(ch >= 0 && ch <= 4);
+		r_assert(ch <= 4);
 		ch = encode2char[ch];
 		result->out_store2[idx] = ch;
 		if (ch != '-') {

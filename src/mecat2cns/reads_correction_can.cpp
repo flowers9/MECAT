@@ -14,30 +14,33 @@ static void* reads_correction_func_can(void* const arg) {
 	const int tid(data.get_thread_id());
 	ConsensusPerThreadData& pdata(data.data[tid]);
 	const ExtensionCandidate* const candidates(pdata.candidates);
-	const idx_t min_size(ceil(data.rco.min_size * 0.95));
-	const int tech_is_pacbio(data.rco.tech == TECH_PACBIO ? 1 : 0);
 	idx_t i(pdata.next_candidate);
-	while (i != pdata.num_candidates) {
-		const idx_t start(i);
-		const idx_t sid(candidates[start].sid);
-		for (++i; i != pdata.num_candidates && candidates[i].sid == sid; ++i) { }
-		if (i - start < data.rco.min_cov || candidates[start].ssize < min_size) {
-			continue;
-		}
-		if (tech_is_pacbio) {
+	if (data.rco.tech == TECH_PACBIO) {
+		while (i != pdata.num_candidates) {
+			const idx_t start(i);
+			const idx_t sid(candidates[start].sid);
+			for (++i; i != pdata.num_candidates && candidates[i].sid == sid; ++i) { }
 			ns_meap_cns::consensus_one_read_can_pacbio(data, pdata, sid, start, i);
-		} else {
-			ns_meap_cns::consensus_one_read_can_nanopore(data, pdata, sid, start, i);
+			if (pdata.cns_results.size() >= MAX_CNS_RESULTS) {
+				data.write_buffer(tid, i);
+			}
 		}
-		if (pdata.cns_results.size() >= MAX_CNS_RESULTS) {
-			data.write_buffer(tid, i);
+	} else {
+		while (i != pdata.num_candidates) {
+			const idx_t start(i);
+			const idx_t sid(candidates[start].sid);
+			for (++i; i != pdata.num_candidates && candidates[i].sid == sid; ++i) { }
+			ns_meap_cns::consensus_one_read_can_nanopore(data, pdata, sid, start, i);
+			if (pdata.cns_results.size() >= MAX_CNS_RESULTS) {
+				data.write_buffer(tid, i);
+			}
 		}
 	}
 	data.write_buffer(tid, i);
 	return NULL;
 }
 
-class EC_Index {
+class EC_Index {	// offset into ec_list (and number of ecs) for each read id
     public:
 	idx_t offset, count;
 	explicit EC_Index() : offset(0), count(0) { }
@@ -46,18 +49,26 @@ class EC_Index {
 };
 
 // reorder list so reads are more concentrated and we can process more
-// ecs per pass, with limited read space
+// ecs per pass, with limited read space; also filters list to exclude
+// candidates of reads with low size or coverage
 
-static ExtensionCandidate* reorder_candidates(ExtensionCandidate* const ec_list, const idx_t nec, const idx_t num_reads) {
-	ExtensionCandidate* new_list(new ExtensionCandidate[nec]);
+static ExtensionCandidate* reorder_candidates(ExtensionCandidate* const ec_list, idx_t& nec, const idx_t num_reads, const int min_cov, const idx_t min_size) {
+	idx_t total_ec(0);
 	std::vector<EC_Index> index(num_reads);
 	// index existing list by sid
 	for (idx_t i(0); i != nec;) {
 		const idx_t start(i);
 		const idx_t sid(ec_list[i].sid);
 		for (++i; i != nec && ec_list[i].sid == sid; ++i) { }
-		index[sid] = EC_Index(start, i - start);
+		// skip candidates that aren't up to snuff
+		const idx_t count(i - start);
+		if (count >= min_cov && ec_list[start].ssize >= min_size) {
+			index[sid] = EC_Index(start, count);
+			total_ec += count;
+		}
 	}
+	nec = total_ec;
+	ExtensionCandidate* new_list(new ExtensionCandidate[nec]);
 	// generate the new read order
 	std::vector<char> used(index.size(), 0);
 	std::vector<idx_t> new_order;
@@ -91,8 +102,10 @@ static ExtensionCandidate* reorder_candidates(ExtensionCandidate* const ec_list,
 	const std::vector<idx_t>::const_iterator end_a(new_order.end());
 	for (; a != end_a; ++a) {
 		const EC_Index& b(index[*a]);
-		memcpy(new_list + pos, ec_list + b.offset, sizeof(ExtensionCandidate) * b.count);
-		pos += b.count;
+		if (b.count) {
+			memcpy(new_list + pos, ec_list + b.offset, sizeof(ExtensionCandidate) * b.count);
+			pos += b.count;
+		}
 	}
 	delete[] ec_list;
 	return new_list;
@@ -103,7 +116,7 @@ static void consensus_one_partition_can(const char* const m4_file_name, Consensu
 	idx_t nec;
 	ExtensionCandidate* ec_list(load_partition_data<ExtensionCandidate>(m4_file_name, nec));
 	std::sort(ec_list, ec_list + nec, CmpExtensionCandidateBySidAndScore());
-	ec_list = reorder_candidates(ec_list, nec, data.reads.num_reads());
+	ec_list = reorder_candidates(ec_list, nec, data.reads.num_reads(), data.rco.min_cov, ceil(data.rco.min_size * 0.95));
 	pthread_t thread_ids[data.rco.num_threads];
 	while (data.ec_offset != nec) {
 		// see how many candidates we can run, given
