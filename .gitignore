@@ -48,3 +48,6 @@ Temporary Items
 
 # Manual backup files
 *.orig
+
+# binaries directory
+Linux-amd64
