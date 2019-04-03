@@ -31,7 +31,7 @@ void PackedDB::add_one_seq(const Sequence& seq) {
 	}
 	const Sequence::str_t& org_seq(seq.sequence());
 	const u1_t* const table(get_dna_encode_table());
-	unsigned int rand_char(-1);	// spread out unknown sequence in a repeatable fashion
+	unsigned int rand_char(0);	// spread out unknown sequence in a repeatable fashion
 	for (idx_t i(0); i < si.size; ++i, ++db_size) {
 		const u1_t c(table[static_cast<int>(org_seq[i])]);
 		set_char(db_size, c < 4 ? c : ++rand_char & 3);
@@ -92,12 +92,12 @@ void PackedDB::convert_fasta_to_db(const std::string& fasta, const std::string& 
 	const std::string ckpt_name(pac_name + ".ckpt");
 	const std::string ckpt_name_tmp(ckpt_name + ".tmp");
 	std::ofstream pout, iout;
-	unsigned int rand_char(-1);	// spread out unknown sequence in a repeatable fashion
-	off_t file_offset(0), fasta_offset, index_offset;
-	if (check_conversion_restart(ckpt_name, fasta_offset, file_offset, index_offset, rand_char)) {
+	unsigned int rand_char(0);	// spread out unknown sequence in a repeatable fashion
+	off_t pac_offset(0), fasta_offset, index_offset;
+	if (check_conversion_restart(ckpt_name, fasta_offset, pac_offset, index_offset, rand_char)) {
 		// don't truncate on restart
 		open_fstream(pout, pac_name_tmp.c_str(), std::ios::out | std::ios::in | std::ios::binary);
-		pout.seekp(file_offset);
+		pout.seekp(pac_offset);
 		open_fstream(iout, index_name_tmp.c_str(), std::ios::out | std::ios::in);
 		iout.seekp(index_offset);
 		fr.seekg(fasta_offset);
@@ -116,7 +116,10 @@ void PackedDB::convert_fasta_to_db(const std::string& fasta, const std::string& 
 			// can't skip entries in index or read ids won't
 			// match ones from candidates, so put dummy size
 			// in ones we don't use
-			iout << file_offset << "\t0\n";
+			iout << pac_offset << "\t0\n";
+			if (!iout) {
+				ERROR("Error writing to pac index file: %s", index_name_tmp.c_str());
+			}
 			continue;
 		}
 		Sequence::str_t& s(read.sequence());
@@ -130,14 +133,17 @@ void PackedDB::convert_fasta_to_db(const std::string& fasta, const std::string& 
 		if (!pout.write((char*)buffer, rbytes)) {
 			ERROR("Write error to file %s", pac_name_tmp.c_str());
 		}
-		iout << file_offset << "\t" << rsize << "\n";
-		file_offset += rbytes;
+		iout << pac_offset << "\t" << rsize << "\n";
+		if (!iout) {
+			ERROR("Error writing to pac index file: %s", index_name_tmp.c_str());
+		}
+		pac_offset += rbytes;
 		if (time(0) >= next_checkpoint_time) {
-			checkpoint_conversion(ckpt_name, ckpt_name_tmp, fr.tellg(), file_offset, iout.tellp(), rand_char);
+			checkpoint_conversion(ckpt_name, ckpt_name_tmp, fr.tellg(), pac_offset, iout.tellp(), rand_char);
 			next_checkpoint_time = time(0) + 300;
 		}
 	}
-	checkpoint_conversion(ckpt_name, ckpt_name_tmp, fr.tellg(), file_offset, iout.tellp(), rand_char);
+	checkpoint_conversion(ckpt_name, ckpt_name_tmp, fr.tellg(), pac_offset, iout.tellp(), rand_char);
 	close_fstream(pout);
 	close_fstream(iout);
 	if (rename(pac_name_tmp.c_str(), pac_name.c_str()) == -1) {
@@ -254,4 +260,99 @@ idx_t PackedDB::load_reads(const ExtensionCandidate* const ec_list, const idx_t 
 		pstream.close();
 	}
 	return i;
+}
+
+void PackedDB::create_index(const std::string& output_prefix, const std::vector<std::pair<idx_t, idx_t> >& index) {
+	const std::string index_name(output_prefix + ".idx");
+	const std::string index_name_tmp(index_name + ".tmp");
+	std::ofstream out;
+	open_fstream(out, index_name_tmp.c_str(), std::ios::out);
+	std::vector<std::pair<idx_t, idx_t> >::const_iterator a(index.begin());
+	const std::vector<std::pair<idx_t, idx_t> >::const_iterator end_a(index.end());
+	for (; a != end_a; ++a) {
+		out << a->first << "\t" << a->second << "\n";
+		if (!out) {
+			ERROR("Error writing to pac index file: %s", index_name_tmp.c_str());
+		}
+	}
+	close_fstream(out);
+	if (rename(index_name_tmp.c_str(), index_name.c_str()) == -1) {
+		ERROR("Error renaming pac index file: %s", index_name_tmp.c_str());
+	}
+}
+
+void PackedDB::read_index(const std::string& output_prefix, std::vector<std::pair<idx_t, idx_t> >& index) {
+	const std::string index_name(output_prefix + ".idx");
+	std::ifstream in;
+	open_fstream(in, index_name.c_str(), std::ios::in);
+	idx_t i, j;
+	while (in >> i >> j) {
+		index.push_back(std::make_pair(i, j));
+	}
+}
+
+// we don't need to generate the index, and we'll be writing to the output
+// file somewhat randomly
+
+void PackedDB::convert_fasta_to_ordered_db(const std::string& fasta, const std::string& output_prefix, const std::vector<std::pair<idx_t, idx_t> >& index, const std::vector<idx_t>& read_order) {
+	DynamicTimer dtimer(__func__);
+	const std::string pac_name(output_prefix + ".pac");
+	// see if we already did this
+	if (access(pac_name.c_str(), F_OK) == 0) {
+		return;
+	}
+	u1_t buffer[MAX_SEQ_SIZE];
+	const u1_t* const et(get_dna_encode_table());
+	FastaReader fr(fasta.c_str());
+	const std::string pac_name_tmp(pac_name + ".tmp");
+	const std::string ckpt_name(pac_name + ".ckpt");
+	const std::string ckpt_name_tmp(ckpt_name + ".tmp");
+	std::ofstream pout;
+	unsigned int rand_char(0);	// spread out unknown sequence in a repeatable fashion
+	off_t pac_offset, fasta_offset, old_rid(0);
+	if (check_conversion_restart(ckpt_name, fasta_offset, pac_offset, old_rid, rand_char)) {
+		// don't truncate, but file does need to exist already
+		open_fstream(pout, pac_name_tmp.c_str(), std::ios::out | std::ios::in | std::ios::binary);
+		fr.seekg(fasta_offset);
+	} else {
+		open_fstream(pout, pac_name_tmp.c_str(), std::ios::out | std::ios::binary);
+	}
+	Sequence read;
+	time_t next_checkpoint_time(time(0) + 300);
+	for (;; ++old_rid) {
+		const idx_t rsize(fr.read_one_seq(read));
+		if (rsize == -1) {
+			break;
+		}
+		const idx_t new_rid(read_order[old_rid]);
+		if (new_rid == -1) {	// we don't use this read, so skip
+			continue;
+		}
+		const std::pair<idx_t, idx_t>& info(index[new_rid]);
+		assert(info.second == rsize);
+		Sequence::str_t& s(read.sequence());
+		const idx_t rbytes((rsize + 3) / 4);
+		// set_char uses | to set bits, so clear first
+		bzero(buffer, rbytes);
+		for (idx_t i(0); i < rsize; ++i) {
+			const u1_t c(et[static_cast<int>(s[i])]);
+			set_char(buffer, i, c < 4 ? c : ++rand_char & 3);
+		}
+		if (!pout.seekp(info.first)) {
+			ERROR("Failed to seek to position: %s", pac_name_tmp.c_str());
+		}
+		if (!pout.write((char*)buffer, rbytes)) {
+			ERROR("Write error to file %s", pac_name_tmp.c_str());
+		}
+		if (time(0) >= next_checkpoint_time) {
+			checkpoint_conversion(ckpt_name, ckpt_name_tmp, fr.tellg(), 0, old_rid, rand_char);
+			next_checkpoint_time = time(0) + 300;
+		}
+	}
+	checkpoint_conversion(ckpt_name, ckpt_name_tmp, fr.tellg(), 0, old_rid, rand_char);
+	close_fstream(pout);
+	if (rename(pac_name_tmp.c_str(), pac_name.c_str()) == -1) {
+		ERROR("Could not rename tmp database file");
+	}
+	unlink(ckpt_name.c_str());
 }

@@ -52,7 +52,7 @@ class EC_Index {	// offset into ec_list (and number of ecs) for each read id
 // ecs per pass, with limited read space; also filters list to exclude
 // candidates of reads with low size or coverage
 
-static ExtensionCandidate* reorder_candidates(ExtensionCandidate* const ec_list, idx_t& nec, const idx_t num_reads, const int min_cov, const idx_t min_size) {
+static ExtensionCandidate* reorder_candidates(ExtensionCandidate* const ec_list, idx_t& nec, const idx_t num_reads, const int min_cov) {
 	idx_t total_ec(0);
 	std::vector<EC_Index> index(num_reads);
 	// index existing list by sid
@@ -60,9 +60,10 @@ static ExtensionCandidate* reorder_candidates(ExtensionCandidate* const ec_list,
 		const idx_t start(i);
 		const idx_t sid(ec_list[i].sid);
 		for (++i; i != nec && ec_list[i].sid == sid; ++i) { }
-		// skip candidates that aren't up to snuff
+		// make sure we have enough coverage
+		// (don't need to check size, that happened during partition)
 		const idx_t count(i - start);
-		if (count >= min_cov && ec_list[start].ssize >= min_size) {
+		if (count >= min_cov) {
 			index[sid] = EC_Index(start, count);
 			total_ec += count;
 		}
@@ -85,13 +86,19 @@ static ExtensionCandidate* reorder_candidates(ExtensionCandidate* const ec_list,
 		// add all reads aligned to, and aligned to those, and so on
 		for (; static_cast<size_t>(next_search) != new_order.size(); ++next_search) {
 			const idx_t sid(new_order[next_search]);
-			idx_t i(index[sid].offset);
-			const idx_t end_i(i + index[sid].count);
-			for (; i != end_i; ++i) {
-				const idx_t qid(ec_list[i].qid);
-				if (!used[qid]) {
-					used[qid] = 1;
-					new_order.push_back(qid);
+			const EC_Index& a(index[sid]);
+			// only include reads that align to this one if we plan to
+			// actually run those alignments (that is, if it has sufficient
+			// coverage)
+			if (a.count >= min_cov) {
+				idx_t i(a.offset);
+				const idx_t end_i(i + a.count);
+				for (; i != end_i; ++i) {
+					const idx_t qid(ec_list[i].qid);
+					if (!used[qid]) {
+						used[qid] = 1;
+						new_order.push_back(qid);
+					}
 				}
 			}
 		}
@@ -116,7 +123,7 @@ static void consensus_one_partition_can(const char* const m4_file_name, Consensu
 	idx_t nec;
 	ExtensionCandidate* ec_list(load_partition_data<ExtensionCandidate>(m4_file_name, nec));
 	std::sort(ec_list, ec_list + nec, CmpExtensionCandidateBySidAndScore());
-	ec_list = reorder_candidates(ec_list, nec, data.reads.num_reads(), data.rco.min_cov, ceil(data.rco.min_size * 0.95));
+	ec_list = reorder_candidates(ec_list, nec, data.reads.num_reads(), data.rco.min_cov);
 	pthread_t thread_ids[data.rco.num_threads];
 	while (data.ec_offset != nec) {
 		// see how many candidates we can run, given
