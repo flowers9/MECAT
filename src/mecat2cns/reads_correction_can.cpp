@@ -123,7 +123,10 @@ static void consensus_one_partition_can(const char* const m4_file_name, Consensu
 	idx_t nec;
 	ExtensionCandidate* ec_list(load_partition_data<ExtensionCandidate>(m4_file_name, nec));
 	std::sort(ec_list, ec_list + nec, CmpExtensionCandidateBySidAndScore());
-	ec_list = reorder_candidates(ec_list, nec, data.reads.num_reads(), data.rco.min_cov);
+	if (access("reads.order", F_OK) != 0) {
+		// if we didn't reorder already, do it here
+		ec_list = reorder_candidates(ec_list, nec, data.reads.num_reads(), data.rco.min_cov);
+	}
 	pthread_t thread_ids[data.rco.num_threads];
 	while (data.ec_offset != nec) {
 		// see how many candidates we can run, given

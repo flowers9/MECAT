@@ -131,7 +131,7 @@ static void normalize_candidate(const ExtensionCandidate& src, ExtensionCandidat
 	}
 }
 
-void partition_candidates(const char* input, const idx_t batch_size, const int min_read_size, const int num_files, idx_t num_reads) {
+void partition_candidates(const char* input, const idx_t batch_size, const int min_read_size, const int num_files, const idx_t num_reads) {
 	DynamicTimer dtimer(__func__);
 	PartitionResultsWriter<ExtensionCandidate> prw(num_files);
 	idx_t i(0);
@@ -196,32 +196,55 @@ void partition_candidates(const char* input, const idx_t batch_size, const int m
 	prw.finalize();
 }
 
-void partition_candidates_reorder(const std::string& input, const idx_t batch_size, const int num_files, const std::vector<idx_t>& read_order) {
+// assign reads to files in read order so that each file
+// has about the same number of candidates
+
+static void allocate_reads_to_files(const idx_t num_batches, const std::vector<int>& align_counts, std::vector<int>& read_to_file) {
+	idx_t total_aligns(0);
+	std::vector<int>::const_iterator a(align_counts.begin());
+	const std::vector<int>::const_iterator end_a(align_counts.end());
+	for (; a != end_a; ++a) {
+		total_aligns += *a;
+	}
+	idx_t read_id(0), align_count(0);
+	for (int batch(0); batch != num_batches; ++batch) {
+		const idx_t want_aligns((total_aligns - align_count) / (num_batches - batch) + align_count);
+		for (; align_count < want_aligns; ++read_id) {
+			// skip over reads we're not correcting, as they might
+			// actually have alignments (which we want to ignore)
+			if (align_counts[read_id]) {
+				align_count += align_counts[read_id];
+				read_to_file[read_id] = batch;
+			}
+		}
+	}
+}
+
+void partition_candidates_reorder(const std::string& input, const idx_t batch_size, const int num_files, const idx_t num_reads, const std::vector<idx_t>& read_order, const std::vector<int>& align_counts) {
 	DynamicTimer dtimer(__func__);
 	PartitionResultsWriter<ExtensionCandidate> prw(num_files);
 	idx_t i(0);
 	off_t input_pos;
 	int is_restart(prw.restart(input, generate_partition_file_name, "partition.done", i, input_pos));
 	if (!is_restart) {
-		prw.num_reads = read_order.size();
+		prw.num_reads = num_reads ? num_reads : read_order.size();
 	}
-	const idx_t num_batches((prw.num_reads + batch_size - 1) / batch_size);
+	const int num_batches((prw.num_reads + batch_size - 1) / batch_size);
+	std::vector<int> read_to_file(prw.num_reads, -1);
+	allocate_reads_to_files(num_batches, align_counts, read_to_file);
 	std::string idx_file_name;
 	generate_partition_index_file_name(input.c_str(), idx_file_name);
 	std::ofstream idx_file;
 	open_fstream(idx_file, idx_file_name.c_str(), std::ios::out);
 	ExtensionCandidate ec, nec;
-	// not set by >>
+	// not set by >> or normalize_candidate()
 	ec.qoff = ec.soff = ec.qend = ec.send = 0;
 	nec.qoff = nec.soff = nec.qend = nec.send = 0;
 	// and here we go through the input file num_batches times,
 	// being limited by the number of open output files we can have
 	for (; i < num_batches; i += prw.kNumFiles) {
-		const idx_t sfid(i);
-		const idx_t efid(std::min(sfid + prw.kNumFiles, num_batches));
-		const int nf(efid - sfid);
-		const idx_t L(batch_size * sfid);
-		const idx_t R(efid < num_batches ? batch_size * efid : prw.num_reads);
+		const int sfid(i);
+		const int efid(std::min(sfid + prw.kNumFiles, num_batches));
 		std::ifstream in;
 		open_fstream(in, input.c_str(), std::ios::in);
 		if (is_restart) {
@@ -238,19 +261,22 @@ void partition_candidates_reorder(const std::string& input, const idx_t batch_si
 			if (ec.qid == -1 || ec.sid == -1) {
 				continue;
 			}
-			if (L <= ec.qid && ec.qid < R) {
+			const int qfile(read_to_file[ec.qid]);
+			if (sfid <= qfile && qfile < efid) {
 				normalize_candidate(ec, nec, false);
-				if (prw.WriteOneResult((ec.qid - L) / batch_size, ec.qid, nec)) {
+				if (prw.WriteOneResult(qfile, ec.qid, nec)) {
 					prw.checkpoint(in.tellg());
 				}
 			}
-			if (L <= ec.sid && ec.sid < R) {
+			const int sfile(read_to_file[ec.sid]);
+			if (sfid <= sfile && sfile < efid) {
 				normalize_candidate(ec, nec, true);
-				if (prw.WriteOneResult((ec.sid - L) / batch_size, ec.sid, nec)) {
+				if (prw.WriteOneResult(sfile, ec.sid, nec)) {
 					prw.checkpoint(in.tellg());
 				}
 			}
 		}
+		const int nf(efid - sfid);
 		for (int k(0); k < nf; ++k) {
 			fprintf(stderr, "%s contains %ld overlaps\n", prw.file_names[k].c_str(), prw.counts[k]);
 			if (prw.counts[k] != 0) {
@@ -326,60 +352,79 @@ void load_partition_files_info(const char* const idx_file_name, std::vector<std:
 	close_fstream(in);
 }
 
-void make_read_sort_order(const std::string& input, const std::string& sort_file_name, const std::string& pac_prefix, const idx_t num_reads, const int min_size, const int min_cov, std::vector<idx_t>& read_order, std::vector<std::pair<idx_t, idx_t> >& read_info) {
-	std::ifstream in;
-	// if file already exists, just read it in
-	if (access(sort_file_name.c_str(), F_OK) == 0) {
-		struct stat buf;
-		if (stat(sort_file_name.c_str(), &buf) == -1) {
-			ERROR("Could not stat read reorder file: %s", sort_file_name.c_str());
-		}
-		read_order.resize(buf.st_size / sizeof(idx_t));
-		open_fstream(in, sort_file_name.c_str(), std::ios::in);
-		if (!in.read((char *)(&read_order[0]), buf.st_size)) {
-			ERROR("Error reading read reorder file: %s", sort_file_name.c_str());
-		}
-		close_fstream(in);
-		PackedDB::read_index(pac_prefix, read_info);
-		return;
+// encapsulate the huge vector (aligns) so it goes out of scope and the
+// memory space recovered as soon as possible
+
+static int find_new_read_order(const std::string& input, const idx_t num_reads, const int min_size, const int min_cov, std::vector<idx_t>& new_order, std::vector<idx_t>& read_sizes, std::vector<int>& align_counts) {
+	const idx_t max_reads(std::numeric_limits<u4_t>::max());
+	if (max_reads < num_reads) {
+		return 0;
 	}
-	DynamicTimer dtimer(__func__);
 	// first read in candidates and find all read-read pairings
-	// (using u4_t to reduce memory footprint, but limits us to 2^32 reads)
+	// (using u4_t to halve memory footprint, but limits us
+	// to 2^32-1 reads)
 	std::vector<std::pair<u4_t, u4_t> > aligns;
-	std::vector<idx_t> read_sizes(num_reads);
+	struct stat buf;
+	if (stat(input.c_str(), &buf) == -1) {
+		ERROR("Could not stat candidate file: %s", input.c_str());
+	}
+	// likely underestimate (by a lot), but a better start than nothing
+	aligns.reserve(buf.st_size / 64);
 	ExtensionCandidate ec;
+	std::ifstream in;
 	open_fstream(in, input.c_str(), std::ios::in);
+	// Note: expanding read_sizes on the fly can be slow, so we
+	// might want to put in some way to get the full number of reads
+	// and allocate up front
+	// Note: it'd be nice if we could add checkpointing to this loop
+	// as it'll take a while to process the entire candidates file
 	while (in >> ec) {
-		// screen out small reads
-		if (ec.qsize >= min_size && ec.ssize >= min_size) {
-			read_sizes[ec.qid] = ec.qsize;
+		// screen out small reads, aligns between
+		// reads we don't care about
+		if (ec.qsize >= min_size && ec.ssize >= min_size && (ec.qid < num_reads || ec.sid < num_reads)) {
+			if (ec.qid < num_reads) {
+				aligns.push_back(std::make_pair<u4_t, u4_t>(ec.qid, ec.sid));
+			} else if (max_reads < ec.qid) {
+				return 0;
+			} else {
+				read_sizes.resize(ec.qid + 1);
+			}
+			if (ec.sid < num_reads) {
+				aligns.push_back(std::make_pair<u4_t, u4_t>(ec.sid, ec.qid));
+			} else if (max_reads < ec.sid) {
+				return 0;
+			} else {
+				read_sizes.resize(ec.sid + 1);
+			}
 			read_sizes[ec.sid] = ec.ssize;
-			aligns.push_back(std::make_pair(ec.qid, ec.sid));
-			aligns.push_back(std::make_pair(ec.sid, ec.qid));
+			read_sizes[ec.qid] = ec.qsize;
 		}
 	}
 	close_fstream(in);
 	std::sort(aligns.begin(), aligns.end());
 	// generate index into aligns
+	align_counts.assign(num_reads, 0);
 	std::vector<idx_t> aligns_index(num_reads, -1);
 	const idx_t end_i(aligns.size());
 	for (idx_t i(0); i != end_i;) {
 		const idx_t start(i);
 		const u4_t read_id(aligns[i].first);
 		for (++i; i != end_i && aligns[i].first == read_id; ++i) { }
-		if (i - start > min_cov) {
+		if (i - start >= min_cov) {
 			aligns_index[read_id] = start;
+			align_counts[read_id] = i - start;
 		}
 	}
-	// generate the new read order
-	std::vector<char> used(num_reads, 0);
-	std::vector<idx_t> new_order;		// [new_read_id] = old_read_id
-	new_order.reserve(num_reads);
-	for (size_t next_unused(0), next_search(0);;) {
+	// generate the new read order;
+	// make sure to make space for all reads that
+	// could be used, not just those we're correcting
+	std::vector<char> used(read_sizes.size(), 0);
+	new_order.reserve(read_sizes.size());
+	size_t next_search(0);
+	for (idx_t next_unused(0);;) {
 		// skip over used reads, reads with too few alignments
-		for (; next_unused != used.size() && (used[next_unused] || aligns_index[next_unused] == -1); ++next_unused) { }
-		if (next_unused == used.size()) {
+		for (; next_unused != num_reads && (used[next_unused] || aligns_index[next_unused] == -1); ++next_unused) { }
+		if (next_unused == num_reads) {
 			break;
 		}
 		used[next_unused] = 1;
@@ -399,20 +444,50 @@ void make_read_sort_order(const std::string& input, const std::string& sort_file
 			}
 		}
 	}
+	return 1;
+}
+
+int make_read_sort_order(const std::string& input, const std::string& sort_file_name, const std::string& pac_prefix, const idx_t num_reads, const int min_size, const int min_cov, std::vector<idx_t>& read_order, std::vector<std::pair<idx_t, idx_t> >& read_info, std::vector<int>& align_counts) {
+	// if file already exists, just read it in
+	if (access(sort_file_name.c_str(), F_OK) == 0) {
+		struct stat buf;
+		if (stat(sort_file_name.c_str(), &buf) == -1) {
+			ERROR("Could not stat read reorder file: %s", sort_file_name.c_str());
+		}
+		read_order.resize(buf.st_size / sizeof(idx_t));
+		std::ifstream in;
+		open_fstream(in, sort_file_name.c_str(), std::ios::in);
+		if (!in.read((char *)(&read_order[0]), buf.st_size)) {
+			ERROR("Error reading read reorder file: %s", sort_file_name.c_str());
+		}
+		close_fstream(in);
+		PackedDB::read_index(pac_prefix, read_info);
+		return 1;
+	}
+	DynamicTimer dtimer(__func__);
+	std::vector<idx_t> new_order;		// [new_read_id] = old_read_id
+	std::vector<idx_t> read_sizes(num_reads);
+	std::vector<int> presort_align_counts;
+	if (!find_new_read_order(input, num_reads, min_size, min_cov, new_order, read_sizes, presort_align_counts)) {
+		return 0;
+	}
 	// now reverse new_order into read_order;
 	// also, generate index for reordered read database
-	read_order.assign(num_reads, -1);
+	read_order.assign(read_sizes.size(), -1);
 	read_info.resize(new_order.size());
+	align_counts.assign(new_order.size(), 0);
 	idx_t total_size(0);
-	size_t new_rid(0);
-	const size_t end_new_rid(new_order.size());
-	for (; new_rid != end_new_rid; ++new_rid) {
+	const idx_t end_new_rid(new_order.size());
+	for (idx_t new_rid(0); new_rid != end_new_rid; ++new_rid) {
 		const idx_t old_rid(new_order[new_rid]);
 		read_order[old_rid] = new_rid;
 		std::pair<idx_t, idx_t>& b(read_info[new_rid]);
 		b.first = total_size;
 		b.second = read_sizes[old_rid];
 		total_size += (b.second + 3) / 4;
+		if (old_rid < num_reads) {
+			align_counts[new_rid] = presort_align_counts[old_rid];
+		}
 	}
 	PackedDB::create_index(pac_prefix, read_info);
 	const std::string sort_file_name_tmp(sort_file_name + ".tmp");
@@ -425,4 +500,5 @@ void make_read_sort_order(const std::string& input, const std::string& sort_file
 	if (rename(sort_file_name_tmp.c_str(), sort_file_name.c_str()) == -1) {
 		ERROR("Could not rename read reorder file: %s", sort_file_name_tmp.c_str());
 	}
+	return 1;
 }

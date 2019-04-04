@@ -30,7 +30,7 @@ template <class T> class PartitionResultsWriter {
 	~PartitionResultsWriter() {
 		CloseFiles();
 	}
-	void OpenFiles(const idx_t sfid, const idx_t efid, const std::string& prefix, file_name_generator fng, const std::string& done_file) {
+	void OpenFiles(const int sfid, const int efid, const std::string& prefix, file_name_generator fng, const std::string& done_file) {
 		CloseFiles();
 		if (efid <= sfid) {
 			return;
