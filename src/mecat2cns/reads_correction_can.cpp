@@ -20,6 +20,10 @@ static void* reads_correction_func_can(void* const arg) {
 			const idx_t start(i);
 			const idx_t sid(candidates[start].sid);
 			for (++i; i != pdata.num_candidates && candidates[i].sid == sid; ++i) { }
+			// still have to check this here, as it's not always checked earlier
+			if (i - start < data.rco.min_cov) {
+				continue;
+			}
 			ns_meap_cns::consensus_one_read_can_pacbio(data, pdata, sid, start, i);
 			if (pdata.cns_results.size() >= MAX_CNS_RESULTS) {
 				data.write_buffer(tid, i);
@@ -30,6 +34,9 @@ static void* reads_correction_func_can(void* const arg) {
 			const idx_t start(i);
 			const idx_t sid(candidates[start].sid);
 			for (++i; i != pdata.num_candidates && candidates[i].sid == sid; ++i) { }
+			if (i - start < data.rco.min_cov) {
+				continue;
+			}
 			ns_meap_cns::consensus_one_read_can_nanopore(data, pdata, sid, start, i);
 			if (pdata.cns_results.size() >= MAX_CNS_RESULTS) {
 				data.write_buffer(tid, i);
@@ -50,7 +57,7 @@ class EC_Index {	// offset into ec_list (and number of ecs) for each read id
 
 // reorder list so reads are more concentrated and we can process more
 // ecs per pass, with limited read space; also filters list to exclude
-// candidates of reads with low size or coverage
+// candidates of reads with low coverage
 
 static ExtensionCandidate* reorder_candidates(ExtensionCandidate* const ec_list, idx_t& nec, const idx_t num_reads, const int min_cov) {
 	idx_t total_ec(0);
@@ -68,23 +75,23 @@ static ExtensionCandidate* reorder_candidates(ExtensionCandidate* const ec_list,
 			total_ec += count;
 		}
 	}
-	nec = total_ec;
-	ExtensionCandidate* new_list(new ExtensionCandidate[nec]);
+	ExtensionCandidate* new_list(new ExtensionCandidate[total_ec]);
 	// generate the new read order
-	std::vector<char> used(index.size(), 0);
+	std::vector<char> used(num_reads, 0);
 	std::vector<idx_t> new_order;
-	new_order.reserve(index.size());
-	idx_t next_unused(0), next_search(0);
+	new_order.reserve(num_reads);
+	idx_t next_unused(0);
+	size_t next_search(0);
 	for (;;) {
 		// skip over used reads, reads with no alignments
-		for (; static_cast<size_t>(next_unused) != used.size() && (used[next_unused] || index[next_unused].count == 0); ++next_unused) { }
-		if (static_cast<size_t>(next_unused) == used.size()) {
+		for (; next_unused != num_reads && (used[next_unused] || index[next_unused].count == 0); ++next_unused) { }
+		if (next_unused == num_reads) {
 			break;
 		}
 		used[next_unused] = 1;
 		new_order.push_back(next_unused);
 		// add all reads aligned to, and aligned to those, and so on
-		for (; static_cast<size_t>(next_search) != new_order.size(); ++next_search) {
+		for (; next_search != new_order.size(); ++next_search) {
 			const idx_t sid(new_order[next_search]);
 			const EC_Index& a(index[sid]);
 			// only include reads that align to this one if we plan to
@@ -115,6 +122,8 @@ static ExtensionCandidate* reorder_candidates(ExtensionCandidate* const ec_list,
 		}
 	}
 	delete[] ec_list;
+	// only do this at the end, once we know we'll successfully complete
+	nec = total_ec;
 	return new_list;
 }
 
@@ -123,15 +132,20 @@ static void consensus_one_partition_can(const char* const m4_file_name, Consensu
 	idx_t nec;
 	ExtensionCandidate* ec_list(load_partition_data<ExtensionCandidate>(m4_file_name, nec));
 	std::sort(ec_list, ec_list + nec, CmpExtensionCandidateBySidAndScore());
-	if (access("reads.order", F_OK) != 0) {
-		// if we didn't reorder already, do it here
-		ec_list = reorder_candidates(ec_list, nec, data.reads.num_reads(), data.rco.min_cov);
+	// if we're memory limited and we didn't already reorder, do it here;
+	// spend some cpu time to reduce number of passes
+	if (data.rco.read_buffer_size && !data.rco.reorder_reads) {
+		// don't die if we run out of memory, just do it the slow way
+		try {
+			ec_list = reorder_candidates(ec_list, nec, data.reads.num_reads(), data.rco.min_cov);
+		} catch (std::bad_alloc &except) { }
 	}
 	pthread_t thread_ids[data.rco.num_threads];
 	while (data.ec_offset != nec) {
 		// see how many candidates we can run, given
 		// how much read sequence we can load into memory
-		const idx_t ecs(data.reads.load_reads(ec_list + data.ec_offset, nec - data.ec_offset));
+		// (unless we're not limited, in which case load 'em all)
+		const idx_t ecs(data.rco.read_buffer_size ? data.reads.load_reads(ec_list + data.ec_offset, nec - data.ec_offset) : nec);
 		allocate_ecs(data, ec_list + data.ec_offset, ecs);
 		for (int i(0); i != data.rco.num_threads; ++i) {
 			pthread_create(&thread_ids[i], NULL, reads_correction_func_can, static_cast<void*>(&data));
@@ -139,7 +153,7 @@ static void consensus_one_partition_can(const char* const m4_file_name, Consensu
 		for (int i(0); i != data.rco.num_threads; ++i) {
 			pthread_join(thread_ids[i], NULL);
 		}
-		// don't update offset before threading to prevent checkpointing with new value
+		// update offset after threading to avoid checkpointing with new value
 		data.ec_offset += ecs;
 		data.reset_threads();
 	}
@@ -180,8 +194,11 @@ int reads_correction_can(ReadsCorrectionOptions& rco) {
 	std::vector<std::string> partition_file_vec;
 	load_partition_files_info(idx_file_name.c_str(), partition_file_vec);
 	PackedDB reads;
-	//reads.load_fasta_db(rco.reads);
-	reads.open_db("fasta.db", rco.read_buffer_size);
+	if (rco.preprocess_reads) {			// load from converted fasta file
+		reads.open_db("fasta.db", rco.read_buffer_size);
+	} else {						// load from fasta file
+		reads.load_fasta_db(rco.reads);
+	}
 	if (rco.job_index != -1) {
 		return reads_correction_can_p(rco, partition_file_vec, reads);
 	} else {

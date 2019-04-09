@@ -107,16 +107,24 @@ int main(int argc, char** argv) {
 			wait_for_files(partition_results);
 		} else {
 			if (rco.input_type == INPUT_TYPE_CAN) {
-				std::vector<idx_t> read_order;
-				std::vector<std::pair<idx_t, idx_t> > read_info;
-				std::vector<int> align_counts;
-				const int reorder_worked(make_read_sort_order(rco.m4, "reads.order", "fasta.db", rco.reads_to_correct, rco.min_size, rco.min_cov, read_order, read_info, align_counts));
-				if (reorder_worked) {
+				if (rco.preprocess_reads) {
+					const idx_t n_reads(PackedDB::convert_fasta_to_db(rco.reads, "fasta.db", rco.min_size));
+					if (rco.reads_to_correct <= 0 || n_reads < rco.reads_to_correct) {
+						rco.reads_to_correct = n_reads;
+					}
+				}
+				if (rco.reorder_reads) {
+					std::vector<idx_t> read_order;
+					std::vector<std::pair<idx_t, idx_t> > read_info;
+					std::vector<int> align_counts;
+					// XXX - all these need to be rewritten - account for
+					// preprocessing (do size checks up front), don't use
+					// excessive memory, write to disk as you go to allow
+					// checkpointing
+					make_read_sort_order(rco.m4, "reads.order", "fasta.db", rco.reads_to_correct, rco.min_size, rco.min_cov, read_order, read_info, align_counts);
 					PackedDB::convert_fasta_to_ordered_db(rco.reads, "fasta.db", read_info, read_order);
 					partition_candidates_reorder(rco.m4, rco.batch_size, rco.num_partition_files, rco.reads_to_correct, read_order, align_counts);
 				} else {
-					LOG(stderr, "Too many reads to reorder, failing back to old method\n");
-					PackedDB::convert_fasta_to_db(rco.reads, "fasta.db", rco.min_size);
 					partition_candidates(rco.m4, rco.batch_size, rco.min_size, rco.num_partition_files, rco.reads_to_correct);
 				}
 			} else {

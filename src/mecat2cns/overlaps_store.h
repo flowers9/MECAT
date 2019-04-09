@@ -83,7 +83,7 @@ template <class T> class PartitionResultsWriter {
 		if (results[i].size() == kStoreSize) {
 			write_buffer_to_disk(i);
 			results[i].clear();
-			if (is_checkpoint_time()) {
+			if (time(0) >= next_checkpoint_time_) {
 				return 1;
 			}
 		}
@@ -145,6 +145,16 @@ template <class T> class PartitionResultsWriter {
 		if (rename(ckpt_file_tmp_.c_str(), ckpt_file_.c_str()) == -1) {
 			LOG(stderr, "Checkpoint failed: rename failed: %s", ckpt_file_.c_str());
 		}
+		next_checkpoint_time_ = time(0) + 300;
+	}
+	idx_t total_count() const {
+		idx_t total(0);
+		std::vector<idx_t>::const_iterator a(counts.begin());
+		const std::vector<idx_t>::const_iterator end_a(counts.end());
+		for (; a != end_a; ++a) {
+			total += *a;
+		}
+		return total;
 	}
     private:
 	idx_t batch_start_ ;
@@ -153,15 +163,6 @@ template <class T> class PartitionResultsWriter {
 	std::string ckpt_file_;
 	std::string ckpt_file_tmp_;
     private:
-	int is_checkpoint_time() {
-		const time_t current_time(time(0));
-		if (current_time < next_checkpoint_time_ || current_time == static_cast<time_t>(-1)) {
-			return 0;
-		} else {
-			next_checkpoint_time_ = current_time + 300;
-			return 1;
-		}
-	}
 	void allocate_data(const std::string& prefix, file_name_generator fng, const int is_restart) {
 		// allocate about a gb of memory as buffer, split among num_open_files
 		kStoreSize = (1 << 30) / sizeof(T) / num_open_files;
@@ -174,7 +175,7 @@ template <class T> class PartitionResultsWriter {
 			const std::string tmp_file(file_names[i] + ".tmp");
 			if (is_restart) {
 				if (access(file_names[i].c_str(), F_OK) == 0) {
-					// already finished
+					// mark as already finished
 					file_names[i].clear();
 					// use /dev/null to prevent write errors
 					open_fstream(files[i], "/dev/null", std::ios::binary);

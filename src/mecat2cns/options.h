@@ -29,6 +29,8 @@ struct ConsensusOptions
     int		grid_start_delay;
     int		full_reads;
     idx_t	read_buffer_size;
+    int		preprocess_reads;
+    int		reorder_reads;
 };
 
 void

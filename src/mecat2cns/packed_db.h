@@ -26,7 +26,8 @@ class PackedDB {
 	}
 	// only call one of load_fasta_db and open_db exactly once
 	void load_fasta_db(const char* fasta);
-	static void convert_fasta_to_db(const std::string& fasta, const std::string& output_prefix, idx_t min_size);
+	// returns number of reads
+	static size_t convert_fasta_to_db(const std::string& fasta, const std::string& output_prefix, idx_t min_size);
 	// create a prospective index file for pac file to be written in random order
 	static void create_index(const std::string& output_prefix, const std::vector<std::pair<idx_t, idx_t> >& index);
 	static void read_index(const std::string& output_prefix, std::vector<std::pair<idx_t, idx_t> >& index);

@@ -352,6 +352,15 @@ void load_partition_files_info(const char* const idx_file_name, std::vector<std:
 	close_fstream(in);
 }
 
+// XXX - convert this to using a file split using PartitionResultsWriter, as it's
+// just way too big to hold in memory for 1TB of reads, plus it takes forever
+// to go through the 10TB alignment file, so that just has to be checkpointed,
+// plus the whole point is that we're memory limited when we go this way, so why
+// gamble on having enough memory to hold the array?  Also, rewrite to do an inital
+// fasta -> fasta db to get the read sizes first, so we don't have to create a read
+// size index here (and checkpoint it), but instead can read in the fasta db index and
+// double check the read sizes as we go
+
 // encapsulate the huge vector (aligns) so it goes out of scope and the
 // memory space recovered as soon as possible
 
@@ -446,6 +455,13 @@ static int find_new_read_order(const std::string& input, const idx_t num_reads, 
 	}
 	return 1;
 }
+
+// create a new order for reads to speed up pulling in reads for alignment
+// processing (for conditions where memory is not sufficient to hold all
+// reads in memory); generates a file with the old -> new read ordering,
+// also generates an index for a fasta db file with the reads in the new
+// order (to allow easy conversion of the original fasta to a fasta db
+// with the new read ordering)
 
 int make_read_sort_order(const std::string& input, const std::string& sort_file_name, const std::string& pac_prefix, const idx_t num_reads, const int min_size, const int min_cov, std::vector<idx_t>& read_order, std::vector<std::pair<idx_t, idx_t> >& read_info, std::vector<int>& align_counts) {
 	// if file already exists, just read it in
