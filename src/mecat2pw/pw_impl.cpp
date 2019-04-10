@@ -764,11 +764,18 @@ static void candidate_detect(PWThreadData* const data, const int tid) {
 				}
 				if (++nec == PWThreadData::kResultListSize) {
 					pthread_mutex_lock(&data->result_write_lock);
-					for (int i(0); i < nec; ++i) {
-						(*data->out) << eclist[i];
-						if (!(*data->out)) {
+					if (data->options->binary_output) {
+						if (!data->out->write((char*)&eclist, sizeof(ExtensionCandidate) * nec)) {
 							std::cerr << "Error writing output\n";
 							exit(1);
+						}
+					} else {
+						for (int i(0); i < nec; ++i) {
+							(*data->out) << eclist[i];
+							if (!(*data->out)) {
+								std::cerr << "Error writing output\n";
+								exit(1);
+							}
 						}
 					}
 					pthread_mutex_unlock(&data->result_write_lock);
@@ -779,11 +786,18 @@ static void candidate_detect(PWThreadData* const data, const int tid) {
 	}
 	if (nec) {
 		pthread_mutex_lock(&data->result_write_lock);
-		for (int i(0); i < nec; ++i) {
-			(*data->out) << eclist[i];
-			if (!(*data->out)) {
+		if (data->options->binary_output) {
+			if (!data->out->write((char*)&eclist, sizeof(ExtensionCandidate) * nec)) {
 				std::cerr << "Error writing output\n";
 				exit(1);
+			}
+		} else {
+			for (int i(0); i < nec; ++i) {
+				(*data->out) << eclist[i];
+				if (!(*data->out)) {
+					std::cerr << "Error writing output\n";
+					exit(1);
+				}
 			}
 		}
 		pthread_mutex_unlock(&data->result_write_lock);
@@ -816,13 +830,13 @@ class ProcessState {
 				std::cerr << "Error: failed to restore from checkpoint: " << ckpt_file_name_ << "\n";
 				exit(1);
 			}
-			// set ios_base::in to prevent truncation
-			out.open(volume_results_name_tmp_.c_str(), std::ios_base::out | std::ios_base::in);
+			// set ios::in to prevent truncation
+			out.open(volume_results_name_tmp_.c_str(), std::ios::out | std::ios::in | std::ios::binary);
 			out.seekp(out_pos_);
 		} else {
 			vid = svid;
-			// can't set ios_base::in, as we need to create the file
-			out.open(volume_results_name_tmp_.c_str());
+			// can't set ios::in, as we need to create the file
+			out.open(volume_results_name_tmp_.c_str(), std::ios::out | std::ios::binary);
 		}
 		if (!out) {
 			std::cerr << "Could not open volume results file: " << volume_results_name_tmp_ << "\n";

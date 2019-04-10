@@ -8,23 +8,23 @@
 #define TASK_SEED 0
 #define TASK_ALN  1
 
-typedef struct
-{
+typedef struct {
 	int task;
-    const char* reads;
-    const char* output;
-    const char* wrk_dir;
-    const char* grid_options;
-    const char* grid_options_split;
-    int         num_threads;
-    int         num_candidates;
-	int			min_align_size;
-	int			min_kmer_match;
-    int         output_gapped_start_point;
-	int 		tech;
-	int 		num_vols;
-	int 		job_index;
-	int		reads_to_correct;	// reads must lead fasta file
+	const char* reads;
+	const char* output;
+	const char* wrk_dir;
+	const char* grid_options;
+	const char* grid_options_split;
+	int num_threads;
+	int num_candidates;
+	int min_align_size;
+	int min_kmer_match;
+	int output_gapped_start_point;
+	int tech;
+	int num_vols;
+	int job_index;
+	int reads_to_correct;	// reads must lead fasta file
+	int binary_output;
 } options_t;
 
 std::string
