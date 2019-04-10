@@ -174,27 +174,38 @@ size_t PackedDB::convert_fasta_to_db(const std::string& fasta, const std::string
 void PackedDB::open_db(const std::string& path, const idx_t size) {
 	destroy();
 	const std::string pac_name(path + ".pac");
-	struct stat buf;
-	if (stat(pac_name.c_str(), &buf) == -1) {
-		ERROR("Could not stat fasta db file: %s", pac_name.c_str());
+	open_fstream(pstream, pac_name.c_str(), std::ios::in);
+	// get number of reads from end of database
+	if (!pstream.seekg(-sizeof(size_t), std::ios_base::end)) {
+		ERROR("Could not seek to end of fasta db to get size\n");
 	}
-	max_db_size = std::min(idx_t(buf.st_size), size);
+	const idx_t file_size(pstream.tellg());
+	max_db_size = std::min(file_size, size);
 	if (max_db_size) {
 		safe_calloc(pac, u1_t, max_db_size);
 	}
-	open_fstream(pstream, pac_name.c_str(), std::ios::in);
+	size_t read_count;
+	if (!pstream.read((char*)&read_count, sizeof(size_t))) {
+		ERROR("Could not read fasta db to get size\n");
+	}
+	seq_idx.reserve(read_count);
+	pstream.clear();					// clear eof
+	if (!pstream.seekg(0, std::ios_base::beg)) {
+		ERROR("Could not reset to start of fast db file\n");
+	}
 	const std::string index_name(path + ".idx");
 	std::ifstream index;
 	open_fstream(index, index_name.c_str(), std::ios::in);
 	SeqIndex si;
-	if (max_db_size == buf.st_size && max_db_size) {	// read it all!
+	if (max_db_size == file_size && max_db_size) {		// read it all!
 		while (index >> si.file_offset >> si.size) {
 			si.memory_offset = si.file_offset * 4;
 			seq_idx.push_back(si);
 		}
 		close_fstream(index);
-		std::streambuf* sb(pstream.rdbuf());
-		sb_read(sb, pac, max_db_size);
+		if (!pstream.read((char*)pac, max_db_size)) {
+			ERROR("Error reading fasta database\n");
+		}
 		close_fstream(pstream);
 	} else {
 		si.memory_offset = -1;
@@ -203,6 +214,21 @@ void PackedDB::open_db(const std::string& path, const idx_t size) {
 		}
 		close_fstream(index);
 	}
+}
+
+const char* PackedDB::load_read(const idx_t read_id) {
+	const SeqIndex& si(seq_idx[read_id]);
+	if (!pstream.is_open()) {	// all in memory already
+		return (char*)pac + si.memory_offset / 4;
+	}
+	if (!pstream.seekg(si.file_offset)) {
+		ERROR("Error seeking on fasta db");
+	}
+	const idx_t bytes((si.size + 3) / 4);
+	if (!pstream.read((char*)pac, bytes)) {
+		ERROR("Error reading fasta db");
+	}
+	return (char*)pac;
 }
 
 idx_t PackedDB::load_reads(const ExtensionCandidate* const ec_list, const idx_t nec) {
@@ -298,8 +324,22 @@ void PackedDB::create_index(const std::string& output_prefix, const std::vector<
 }
 
 void PackedDB::read_index(const std::string& output_prefix, std::vector<std::pair<idx_t, idx_t> >& index) {
+	const std::string pac_name(output_prefix + ".pac");
+	std::ifstream in(pac_name.c_str());
+	// pre-allocate index if possible
+	if (in.is_open()) {
+		// get number of reads from end of database
+		if (!in.seekg(-sizeof(size_t), std::ios_base::end)) {
+			ERROR("Could not seek to end of fasta db to get size\n");
+		}
+		size_t read_count;
+		if (!in.read((char*)&read_count, sizeof(size_t))) {
+			ERROR("Could not read fasta db to get size\n");
+		}
+		in.close();
+		index.reserve(read_count);
+	}
 	const std::string index_name(output_prefix + ".idx");
-	std::ifstream in;
 	open_fstream(in, index_name.c_str(), std::ios::in);
 	idx_t i, j;
 	while (in >> i >> j) {
@@ -307,66 +347,103 @@ void PackedDB::read_index(const std::string& output_prefix, std::vector<std::pai
 	}
 }
 
+void PackedDB::read_sizes(const std::string& output_prefix, std::vector<idx_t>& sizes) {
+	const std::string pac_name(output_prefix + ".pac");
+	std::ifstream in(pac_name.c_str());
+	// pre-allocate index if possible
+	if (in.is_open()) {
+		// get number of reads from end of database
+		if (!in.seekg(-sizeof(size_t), std::ios_base::end)) {
+			ERROR("Could not seek to end of fasta db to get size\n");
+		}
+		size_t read_count;
+		if (!in.read((char*)&read_count, sizeof(size_t))) {
+			ERROR("Could not read fasta db to get size\n");
+		}
+		in.close();
+		sizes.reserve(read_count);
+	}
+	const std::string index_name(output_prefix + ".idx");
+	open_fstream(in, index_name.c_str(), std::ios::in);
+	idx_t i, j;
+	while (in >> i >> j) {
+		sizes.push_back(j);
+	}
+}
+
+static int check_reorder_restart(const std::string& ckpt_file, size_t& rid) {
+	std::ifstream in(ckpt_file.c_str());
+	if (!in) {
+		return 0;
+	}
+	in >> rid;
+	if (!in) {
+		ERROR("Read error while restoring checkpoint from %s", ckpt_file.c_str());
+	}
+	return 1;
+}
+
+static void checkpoint_reorder(const std::string& ckpt_file, const std::string& ckpt_file_tmp, const size_t rid) {
+	std::ofstream out(ckpt_file_tmp.c_str());
+	if (!out) {
+		LOG(stderr, "Checkpoint failed: couldn't open %s", ckpt_file_tmp.c_str());
+		return;
+	}
+	out << rid << "\n";
+	if (!out) {
+		LOG(stderr, "Checkpoint failed: write failed: %s", ckpt_file_tmp.c_str());
+		return;
+	}
+	out.close();
+	if (rename(ckpt_file_tmp.c_str(), ckpt_file.c_str()) == -1) {
+		LOG(stderr, "Checkpoint failed: rename failed: %s", ckpt_file.c_str());
+	}
+}
+
 // we don't need to generate the index, and we'll be writing to the output
 // file somewhat randomly
 
-void PackedDB::convert_fasta_to_ordered_db(const std::string& fasta, const std::string& output_prefix, const std::vector<std::pair<idx_t, idx_t> >& index, const std::vector<idx_t>& read_order) {
+void PackedDB::convert_db_to_ordered_db(const std::string& input_prefix , const std::string& output_prefix, const std::vector<std::pair<idx_t, idx_t> >& index, const std::vector<idx_t>& read_order) {
 	const std::string pac_name(output_prefix + ".pac");
 	// see if we already did this
 	if (access(pac_name.c_str(), F_OK) == 0) {
 		return;
 	}
 	DynamicTimer dtimer(__func__);
-	u1_t buffer[MAX_SEQ_SIZE];
-	const u1_t* const et(get_dna_encode_table());
-	FastaReader fr(fasta.c_str());
 	const std::string pac_name_tmp(pac_name + ".tmp");
 	const std::string ckpt_name(pac_name + ".ckpt");
 	const std::string ckpt_name_tmp(ckpt_name + ".tmp");
+	PackedDB old_reads;
+	old_reads.open_db(input_prefix, MAX_SEQ_SIZE);
 	std::ofstream pout;
-	unsigned int rand_char(0);	// spread out unknown sequence in a repeatable fashion
-	off_t pac_offset, fasta_offset, old_rid(0);
-	size_t read_count(0);
-	if (check_conversion_restart(ckpt_name, fasta_offset, pac_offset, old_rid, rand_char, read_count)) {
+	size_t old_rid(0);
+	if (check_reorder_restart(ckpt_name, old_rid)) {
 		// don't truncate, but file does need to exist already
 		open_fstream(pout, pac_name_tmp.c_str(), std::ios::out | std::ios::in | std::ios::binary);
-		fr.seekg(fasta_offset);
 	} else {
 		open_fstream(pout, pac_name_tmp.c_str(), std::ios::out | std::ios::binary);
 	}
-	Sequence read;
 	time_t next_checkpoint_time(time(0) + 300);
-	for (;; ++old_rid) {
-		const idx_t rsize(fr.read_one_seq(read));
-		if (rsize == -1) {
-			break;
-		}
+	for (; old_rid != read_order.size(); ++old_rid) {
 		const idx_t new_rid(read_order[old_rid]);
 		if (new_rid == -1) {	// we don't use this read, so skip
 			continue;
 		}
+		const char* seq(old_reads.load_read(old_rid));
 		const std::pair<idx_t, idx_t>& info(index[new_rid]);
-		assert(info.second == rsize);
-		Sequence::str_t& s(read.sequence());
-		const idx_t rbytes((rsize + 3) / 4);
-		// set_char uses | to set bits, so clear first
-		bzero(buffer, rbytes);
-		for (idx_t i(0); i < rsize; ++i) {
-			const u1_t c(et[static_cast<int>(s[i])]);
-			set_char(buffer, i, c < 4 ? c : ++rand_char & 3);
-		}
+		const idx_t rbytes((info.second + 3) / 4);
 		if (!pout.seekp(info.first)) {
 			ERROR("Failed to seek to position: %s", pac_name_tmp.c_str());
 		}
-		if (!pout.write((char*)buffer, rbytes)) {
+		if (!pout.write(seq, rbytes)) {
 			ERROR("Write error to file %s", pac_name_tmp.c_str());
 		}
 		if (time(0) >= next_checkpoint_time) {
-			checkpoint_conversion(ckpt_name, ckpt_name_tmp, fr.tellg(), 0, old_rid, rand_char, read_count);
+			checkpoint_reorder(ckpt_name, ckpt_name_tmp, old_rid);
 			next_checkpoint_time = time(0) + 300;
 		}
 	}
-	checkpoint_conversion(ckpt_name, ckpt_name_tmp, fr.tellg(), 0, old_rid, rand_char, read_count);
+	checkpoint_reorder(ckpt_name, ckpt_name_tmp, old_rid);
 	close_fstream(pout);
 	if (rename(pac_name_tmp.c_str(), pac_name.c_str()) == -1) {
 		ERROR("Could not rename tmp database file");

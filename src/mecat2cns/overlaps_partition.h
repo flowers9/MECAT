@@ -19,7 +19,6 @@ void partition_candidates_reorder(const std::string& input, idx_t batch_size, in
 
 void load_partition_files_info(const char* idx_file_name, std::vector<std::string>& file_info_vec);
 
-int make_read_sort_order(const std::string& input, const std::string& sort_file_name, const std::string& pac_prefix, idx_t num_reads, int min_size, int min_cov, std::vector<idx_t>& read_order, std::vector<std::pair<idx_t, idx_t> >& read_info, std::vector<int>& align_counts);
-
+void make_read_sort_order(const std::string& input, const std::string& old_pac_prefix, const std::string& sort_file_name, const std::string& pac_prefix, idx_t num_reads, int min_size, int min_cov, std::vector<idx_t>& read_order, std::vector<std::pair<idx_t, idx_t> >& read_index, std::vector<int>& align_counts);
 
 #endif // OVERLAPS_PARTITION_H

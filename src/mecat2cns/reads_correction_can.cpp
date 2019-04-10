@@ -195,7 +195,7 @@ int reads_correction_can(ReadsCorrectionOptions& rco) {
 	load_partition_files_info(idx_file_name.c_str(), partition_file_vec);
 	PackedDB reads;
 	if (rco.preprocess_reads) {			// load from converted fasta file
-		reads.open_db("fasta.db", rco.read_buffer_size);
+		reads.open_db(rco.reorder_reads ? "fasta_ordered.db" : "fasta.db", rco.read_buffer_size);
 	} else {						// load from fasta file
 		reads.load_fasta_db(rco.reads);
 	}
