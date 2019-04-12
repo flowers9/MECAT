@@ -12,7 +12,7 @@ void* reads_correction_func_m4(void* arg) {
 	ConsensusThreadData& data(*(static_cast<ConsensusThreadData*>(arg)));
 	const int tid(data.get_thread_id());
 	ConsensusPerThreadData& pdata(data.data[tid]);
-	ExtensionCandidate* const overlaps(pdata.candidates);
+	ExtensionCandidate* const overlaps((ExtensionCandidate*)pdata.candidates);
 	const idx_t num_ovlps(pdata.num_candidates);
 	idx_t i = 0, j;
 	while (i < num_ovlps) {

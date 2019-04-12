@@ -9,7 +9,6 @@
 
 static int input_type_pacbio		= 1;
 static int num_threads_pacbio		= 1;
-static idx_t batch_size_pacbio		= 100000;
 static double mapping_ratio_pacbio	= 0.9;
 static int align_size_pacbio		= 2000;
 static int cov_pacbio			= 6;
@@ -19,7 +18,6 @@ static int tech_pacbio			= TECH_PACBIO;
 
 static int input_type_nanopore		= 1;
 static int num_threads_nanopore		= 1;
-static idx_t batch_size_nanopore	= 100000;
 static double mapping_ratio_nanopore	= 0.4;
 static int align_size_nanopore		= 400;
 static int cov_nanopore			= 6;
@@ -33,6 +31,7 @@ static int full_reads = 0;
 static idx_t read_buffer_size = 0;
 static int preprocess_reads = 0;
 static int reorder_reads = 0;
+static size_t batch_size = 8589934592;		// 8 GB
 
 static const char input_type_n    = 'i';
 static const char num_threads_n   = 't';
@@ -59,7 +58,6 @@ print_pacbio_default_options()
 {
 	std::cerr << "-" << input_type_n << " " << input_type_pacbio
 		 << " -" << num_threads_n << " " << num_threads_pacbio
-		 << " -" << batch_size_n << " " << batch_size_pacbio
 		 << " -" << mapping_ratio_n << " " << mapping_ratio_pacbio
 		 << " -" << align_size_n << " " << align_size_pacbio
 		 << " -" << cov_n << " " << cov_pacbio << " "
@@ -71,7 +69,6 @@ void print_nanopore_default_options()
 {
 	std::cerr << "-" << input_type_n << " " << input_type_nanopore
 		 << " -" << num_threads_n << " " << num_threads_nanopore
-		 << " -" << batch_size_n << " " << batch_size_nanopore
 		 << " -" << mapping_ratio_n << " " << mapping_ratio_nanopore
 		 << " -" << align_size_n << " " << align_size_nanopore
 		 << " -" << cov_n << " " << cov_nanopore
@@ -88,7 +85,7 @@ make_options(const ConsensusOptions& options)
 	if (options.num_threads > -1) {
 		cmd << " -" << num_threads_n << " " << options.num_threads;
 	}
-	if (options.batch_size > 0) {
+	if (options.batch_size) {
 		cmd << " -" << batch_size_n << " " << options.batch_size;
 	}
 	if (options.min_mapping_ratio >= 0) {
@@ -144,11 +141,10 @@ void print_usage(const char* prog) {
 		<< prog << " [options] input reads output\n"
 		<< "\n"
 		<< "OPTIONS:\n"
-		<< "-" << tech_n << " <0/1>\tsequencing platform: 0 = PACBIO, 1 = NANOPORE\n"
-		<< "\t\tdefault: 0\n"
+		<< "-" << tech_n << " <0/1>\tsequencing platform: 0 = PACBIO, 1 = NANOPORE [0]\n"
 		<< "-" << input_type_n << " <0/1>\tinput type: 0 = candidate, 1 = m4\n"
 		<< "-" << num_threads_n << " <Integer>\tnumber of threads (CPUs)\n"
-		<< "-" << batch_size_n << " <Integer>\tbatch size that the reads will be partitioned\n"
+		<< "-" << batch_size_n << " <Integer>\tmemory used for holding candidates [8 GB]\n"
 		<< "-" << mapping_ratio_n << " <Real>\tminimum mapping ratio\n"
 		<< "-" << align_size_n << " <Integer>\tminimum overlap size\n"
 		<< "-" << cov_n << " <Integer>\tminimum coverage under consideration\n"
@@ -186,10 +182,10 @@ ConsensusOptions init_consensus_options(const int tech) {
 	t.read_buffer_size	= read_buffer_size;
 	t.preprocess_reads	= preprocess_reads;
 	t.reorder_reads		= reorder_reads;
+	t.batch_size            = batch_size;
 	if (tech == TECH_PACBIO) {
 		t.input_type            = input_type_pacbio;
 		t.num_threads           = num_threads_pacbio;
-		t.batch_size            = batch_size_pacbio;
 		t.min_mapping_ratio     = mapping_ratio_pacbio;
 		t.min_align_size        = align_size_pacbio;
 		t.min_cov               = cov_pacbio;
@@ -199,7 +195,6 @@ ConsensusOptions init_consensus_options(const int tech) {
 	} else {
 		t.input_type            = input_type_nanopore;
 		t.num_threads           = num_threads_nanopore;
-		t.batch_size            = batch_size_nanopore;
 		t.min_mapping_ratio     = mapping_ratio_nanopore;
 		t.min_align_size        = align_size_nanopore;
 		t.min_cov               = cov_nanopore;
@@ -326,7 +321,7 @@ int parse_arguments(int argc, char* argv[], ConsensusOptions& t) {
 		std::cerr << "cpu threads must be greater than 0\n";
 		parse_success = false;
 	}
-	if (t.batch_size <= 0) {
+	if (t.batch_size == 0) {
 		std::cerr << "batch size must be greater than 0\n";
 		parse_success = false;
 	}

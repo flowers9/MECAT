@@ -98,88 +98,65 @@ void generate_partition_file_name(const char* const m4_file_name, const idx_t pa
 	ret += os.str();
 }
 
-static idx_t get_num_reads(const char* const candidates_file) {
-	std::ifstream in;
-	open_fstream(in, candidates_file, std::ios::in);
-	ExtensionCandidate ec;
-	int max_id(-1);
-	while (in >> ec) {
-		max_id = std::max(ec.qid, max_id);
-		max_id = std::max(ec.sid, max_id);
-	}
-	close_fstream(in);
-	return max_id + 1;
-}
-
-static void normalize_candidate(const ExtensionCandidate& src, ExtensionCandidate& dst, const bool subject_is_target) {
-	if (subject_is_target) {
-		dst = src;
-	} else {
-		dst.qdir = src.sdir;
-		dst.qid = src.sid;
-		dst.qext = src.sext;
-		dst.qsize = src.ssize;
-		dst.sdir = src.qdir;
-		dst.sid = src.qid;
-		dst.sext = src.qext;
-		dst.ssize = src.qsize;
-		dst.score = src.score;
-	}
-	if (dst.sdir == REV) {
-		dst.qdir = REVERSE_STRAND(dst.qdir);
-		dst.sdir = REVERSE_STRAND(dst.sdir);
-	}
-}
-
-void partition_candidates(const char* input, const idx_t batch_size, const int min_read_size, const int num_files, const idx_t num_reads) {
+void partition_candidates(const std::string& input, const std::string& pac_prefix, const size_t batch_size, const int num_files, const idx_t num_reads) {
 	DynamicTimer dtimer(__func__);
-	PartitionResultsWriter<ExtensionCandidate> prw(num_files);
+	struct stat buf;
+	if (stat(input.c_str(), &buf) == -1) {
+		ERROR("Could not get file size: %s", input.c_str());
+	}
+	// each candidate line takes approximately 44 characters, but go with 32;
+	// each one produces two candidates (forward and reverse)
+	const idx_t num_batches(buf.st_size / 32 * 2 * sizeof(ExtensionCandidateCompressed) / batch_size);
+	const idx_t reads_per_batch((num_reads + num_batches - 1) / num_batches);
+	std::vector<idx_t> read_sizes;
+	PackedDB::read_sizes(pac_prefix, read_sizes);
+	PartitionResultsWriter<ExtensionCandidateCompressed> prw(num_files);
 	idx_t i(0);
 	off_t input_pos;
 	int is_restart(prw.restart(input, generate_partition_file_name, "partition.done", i, input_pos));
-	if (!is_restart) {
-		prw.num_reads = num_reads ? num_reads : get_num_reads(input);
-	}
-	const idx_t num_batches((prw.num_reads + batch_size - 1) / batch_size);
 	std::string idx_file_name;
-	generate_partition_index_file_name(input, idx_file_name);
+	generate_partition_index_file_name(input.c_str(), idx_file_name);
 	std::ofstream idx_file;
 	open_fstream(idx_file, idx_file_name.c_str(), std::ios::out);
-	ExtensionCandidate ec, nec;
-	// not set by >>
-	ec.qoff = ec.soff = ec.qend = ec.send = 0;
-	nec.qoff = nec.soff = nec.qend = nec.send = 0;
+	ExtensionCandidate ec;
+	ExtensionCandidateCompressed nec;
 	// and here we go through the input file num_batches times,
 	// being limited by the number of open output files we can have
 	for (; i < num_batches; i += prw.kNumFiles) {
 		const idx_t sfid(i);
 		const idx_t efid(std::min(sfid + prw.kNumFiles, num_batches));
 		const int nf(efid - sfid);
-		const idx_t L(batch_size * sfid);
-		const idx_t R(efid < num_batches ? batch_size * efid : prw.num_reads);
+		const idx_t L(sfid * reads_per_batch);
+		const idx_t R(efid < num_batches ? efid * reads_per_batch : num_reads);
 		std::ifstream in;
-		open_fstream(in, input, std::ios::in);
+		open_fstream(in, input.c_str(), std::ios::in);
 		if (is_restart) {
 			if (!in.seekg(input_pos)) {
-				ERROR("Input seek failed while restoring checkpoint: %s", input);
+				ERROR("Input seek failed while restoring checkpoint: %s", input.c_str());
 			}
 			is_restart = 0;
 		} else {
 			prw.OpenFiles(sfid, efid, input, generate_partition_file_name, "partition.done");
 		}
 		while (in >> ec) {
-			if (ec.qsize < min_read_size || ec.ssize < min_read_size) {
+			if (!read_sizes[ec.sid] || !read_sizes[ec.qid]) {
 				continue;
 			}
-			if (L <= ec.qid && ec.qid < R) {
-				normalize_candidate(ec, nec, false);
-				if (prw.WriteOneResult((ec.qid - L) / batch_size, ec.qid, nec)) {
+			r_assert(ec.ssize == read_sizes[ec.sid] && ec.qsize == read_sizes[ec.qid]);
+			r_assert(ec.sid <= ExtensionCandidateCompressed::max_value);
+			r_assert(ec.qid <= ExtensionCandidateCompressed::max_value);
+			r_assert(ec.sext <= ExtensionCandidateCompressed::max_value);
+			r_assert(ec.qext <= ExtensionCandidateCompressed::max_qext);
+			r_assert(ec.score <= ExtensionCandidateCompressed::max_value);
+			if (L <= ec.sid && ec.sid < R) {
+				nec.set(ec);
+				if (prw.WriteOneResult((nec.sid - L) / reads_per_batch, nec.sid, nec)) {
 					prw.checkpoint(in.tellg());
 				}
 			}
-			if (L <= ec.sid && ec.sid < R) {
-				normalize_candidate(ec, nec, true);
-				if (prw.WriteOneResult((ec.sid - L) / batch_size, ec.sid, nec)) {
+			if (L <= ec.qid && ec.qid < R) {
+				nec.set_swap(ec);
+				if (prw.WriteOneResult((nec.sid - L) / reads_per_batch, nec.sid, nec)) {
 					prw.checkpoint(in.tellg());
 				}
 			}
@@ -223,26 +200,27 @@ static void allocate_reads_to_files(const idx_t num_batches, const std::vector<i
 	}
 }
 
-void partition_candidates_reorder(const std::string& input, const idx_t batch_size, const int num_files, const idx_t num_reads, const std::vector<idx_t>& read_order, const std::vector<int>& align_counts) {
+void partition_candidates_reorder(const std::string& input, const size_t batch_size, const int num_files, const idx_t num_reads, const std::vector<idx_t>& read_order, const std::vector<int>& align_counts) {
 	DynamicTimer dtimer(__func__);
-	PartitionResultsWriter<ExtensionCandidate> prw(num_files);
+	struct stat buf;
+	if (stat(input.c_str(), &buf) == -1) {
+		ERROR("Could not get file size: %s", input.c_str());
+	}
+	// each candidate line takes approximately 44 characters, but go with 32;
+	// each one produces two candidates (forward and reverse)
+	const int num_batches(buf.st_size / 32 * 2 * sizeof(ExtensionCandidateCompressed) / batch_size);
+	PartitionResultsWriter<ExtensionCandidateCompressed> prw(num_files);
 	idx_t i(0);
 	off_t input_pos;
 	int is_restart(prw.restart(input, generate_partition_file_name, "partition.done", i, input_pos));
-	if (!is_restart) {
-		prw.num_reads = num_reads ? num_reads : read_order.size();
-	}
-	const int num_batches((prw.num_reads + batch_size - 1) / batch_size);
-	std::vector<int> read_to_file(prw.num_reads, -1);
+	std::vector<int> read_to_file(num_reads, -1);
 	allocate_reads_to_files(num_batches, align_counts, read_to_file);
 	std::string idx_file_name;
 	generate_partition_index_file_name(input.c_str(), idx_file_name);
 	std::ofstream idx_file;
 	open_fstream(idx_file, idx_file_name.c_str(), std::ios::out);
-	ExtensionCandidate ec, nec;
-	// not set by >> or normalize_candidate()
-	ec.qoff = ec.soff = ec.qend = ec.send = 0;
-	nec.qoff = nec.soff = nec.qend = nec.send = 0;
+	ExtensionCandidate ec;
+	ExtensionCandidateCompressed nec;
 	// and here we go through the input file num_batches times,
 	// being limited by the number of open output files we can have
 	for (; i < num_batches; i += prw.kNumFiles) {
@@ -264,17 +242,22 @@ void partition_candidates_reorder(const std::string& input, const idx_t batch_si
 			if (ec.qid == -1 || ec.sid == -1) {
 				continue;
 			}
-			const int qfile(read_to_file[ec.qid]);
-			if (sfid <= qfile && qfile < efid) {
-				normalize_candidate(ec, nec, false);
-				if (prw.WriteOneResult(qfile, ec.qid, nec)) {
+			r_assert(ec.sid <= ExtensionCandidateCompressed::max_value);
+			r_assert(ec.qid <= ExtensionCandidateCompressed::max_value);
+			r_assert(ec.sext <= ExtensionCandidateCompressed::max_value);
+			r_assert(ec.qext <= ExtensionCandidateCompressed::max_qext);
+			r_assert(ec.score <= ExtensionCandidateCompressed::max_value);
+			const int sfile(read_to_file[ec.sid]);
+			if (sfid <= sfile && sfile < efid) {
+				nec.set(ec);
+				if (prw.WriteOneResult(sfile, nec.sid, nec)) {
 					prw.checkpoint(in.tellg());
 				}
 			}
-			const int sfile(read_to_file[ec.sid]);
-			if (sfid <= sfile && sfile < efid) {
-				normalize_candidate(ec, nec, true);
-				if (prw.WriteOneResult(sfile, ec.sid, nec)) {
+			const int qfile(read_to_file[ec.qid]);
+			if (sfid <= qfile && qfile < efid) {
+				nec.set_swap(ec);
+				if (prw.WriteOneResult(qfile, nec.sid, nec)) {
 					prw.checkpoint(in.tellg());
 				}
 			}
@@ -292,12 +275,17 @@ void partition_candidates_reorder(const std::string& input, const idx_t batch_si
 	prw.finalize();
 }
 
-void partition_m4records(const char* const m4_file_name, const double min_cov_ratio, const idx_t batch_size, const int min_read_size, const int num_files) {
+void partition_m4records(const char* const m4_file_name, const double min_cov_ratio, const size_t batch_size, const int min_read_size, const int num_files) {
 	DynamicTimer dtimer(__func__);
 	idx_t num_reads(get_qualified_m4record_counts(m4_file_name, min_cov_ratio));
 	std::set<idx_t> repeat_reads;
 	//get_repeat_reads(m4_file_name, min_cov_ratio, num_reads, repeat_reads);
-	const idx_t num_batches((num_reads + batch_size - 1) / batch_size);
+	struct stat buf;
+	if (stat(m4_file_name, &buf) == -1) {
+		ERROR("Could not get file size: %s", m4_file_name);
+	}
+	const idx_t num_batches(buf.st_size / 32 * 2 * sizeof(ExtensionCandidate) / batch_size);
+	const idx_t reads_per_batch((num_reads + num_batches - 1) / num_batches);
 	std::string idx_file_name;
 	generate_partition_index_file_name(m4_file_name, idx_file_name);
 	std::ofstream idx_file;
@@ -309,8 +297,8 @@ void partition_m4records(const char* const m4_file_name, const double min_cov_ra
 		const idx_t sfid(i);
 		const idx_t efid(std::min(sfid + prw.kNumFiles, num_batches));
 		const int nf(efid - sfid);
-		const idx_t L(batch_size * sfid);
-		const idx_t R(efid < num_batches ? batch_size * efid : prw.num_reads);
+		const idx_t L(reads_per_batch * sfid);
+		const idx_t R(efid < num_batches ? reads_per_batch * efid : num_reads);
 		std::ifstream in;
 		open_fstream(in, m4_file_name, std::ios::in);
 		prw.OpenFiles(sfid, efid, m4_file_name, generate_partition_file_name, "partition.done");
@@ -325,12 +313,12 @@ void partition_m4records(const char* const m4_file_name, const double min_cov_ra
 			if (m4qid(m4) >= L && m4qid(m4) < R) {
 				normalize_m4record(m4, false, nm4);
 				m4_to_candidate(nm4, ec);
-				prw.WriteOneResult((m4qid(m4) - L) / batch_size, m4qid(m4), ec);
+				prw.WriteOneResult((m4qid(m4) - L) / reads_per_batch , m4qid(m4), ec);
 			}
 			if (m4sid(m4) >= L && m4sid(m4) < R) {
 				normalize_m4record(m4, true, nm4);
 				m4_to_candidate(nm4, ec);
-				prw.WriteOneResult((m4sid(m4) - L) / batch_size, m4sid(m4), ec);
+				prw.WriteOneResult((m4sid(m4) - L) / reads_per_batch , m4sid(m4), ec);
 			}
 		}
 		for (int k(0); k < nf; ++k) {
@@ -361,7 +349,7 @@ void load_partition_files_info(const char* const idx_file_name, std::vector<std:
 // plus the whole point is that we're memory limited when we go this way, so why
 // gamble on having enough memory to hold the array?
 
-static void generate_new_read_order(const std::string& input, const idx_t num_reads, const int min_size, const int min_cov, const std::vector<idx_t>& old_read_sizes, std::vector<idx_t>& new_order, std::vector<int>& align_counts) {
+static void generate_new_read_order(const std::string& input, const idx_t num_reads, const int min_cov, const std::vector<idx_t>& old_read_sizes, std::vector<idx_t>& new_order, std::vector<int>& align_counts) {
 	// first read in candidates and find all read-read pairings
 	std::vector<std::pair<idx_t, idx_t> > aligns;
 	ExtensionCandidate ec;
@@ -369,9 +357,8 @@ static void generate_new_read_order(const std::string& input, const idx_t num_re
 	open_fstream(in, input.c_str(), std::ios::in);
 	while (in >> ec) {
 		// screen out small reads, aligns between reads we don't care about;
-		// we could use old_read_sizes[id] instead, but as ec is right here,
-		// should be faster to do the comparison with it
-		if (ec.qsize >= min_size && ec.ssize >= min_size && (ec.qid < num_reads || ec.sid < num_reads)) {
+		// use old_read_sizes as we've already screened out the small reads
+		if (old_read_sizes[ec.sid] && old_read_sizes[ec.qid] && (ec.qid < num_reads || ec.sid < num_reads)) {
 			r_assert(old_read_sizes[ec.sid] == ec.ssize && old_read_sizes[ec.qid] == ec.qsize);
 			if (ec.qid < num_reads) {
 				aligns.push_back(std::make_pair(ec.qid, ec.sid));
@@ -437,7 +424,7 @@ static void generate_new_read_order(const std::string& input, const idx_t num_re
 // order (to allow easy conversion of the original fasta to a fasta db
 // with the new read ordering)
 
-void make_read_sort_order(const std::string& input, const std::string& old_pac_prefix, const std::string& sort_file_name, const std::string& pac_prefix, const idx_t num_reads, const int min_size, const int min_cov, std::vector<idx_t>& read_order, std::vector<std::pair<idx_t, idx_t> >& read_index, std::vector<int>& align_counts) {
+void make_read_sort_order(const std::string& input, const std::string& old_pac_prefix, const std::string& sort_file_name, const std::string& pac_prefix, const idx_t num_reads, const int min_cov, std::vector<idx_t>& read_order, std::vector<std::pair<idx_t, idx_t> >& read_index, std::vector<int>& align_counts) {
 	// if file already exists, just read it in
 	if (access(sort_file_name.c_str(), F_OK) == 0) {
 		struct stat buf;
@@ -459,7 +446,7 @@ void make_read_sort_order(const std::string& input, const std::string& old_pac_p
 	PackedDB::read_sizes(old_pac_prefix, old_read_sizes);
 	std::vector<idx_t> new_order;		// [new_read_id] = old_read_id
 	std::vector<int> presort_align_counts;
-	generate_new_read_order(input, num_reads, min_size, min_cov, old_read_sizes, new_order, presort_align_counts);
+	generate_new_read_order(input, num_reads, min_cov, old_read_sizes, new_order, presort_align_counts);
 	// now reverse new_order into read_order;
 	// also, generate index for reordered read database
 	read_order.assign(old_read_sizes.size(), -1);

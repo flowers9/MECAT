@@ -2,6 +2,7 @@
 #define ALIGNMENT_H
 
 #include <fstream>
+#include <limits>	// numeric_limits<>
 
 #include "defs.h"
 
@@ -10,6 +11,43 @@ struct ExtensionCandidate
 	int qdir, qid, qext, qsize, qoff, qend;
 	int sdir, sid, sext, ssize, soff, send;
 	int score;
+};
+
+// candidates only use a few of these values, so make a smaller structure for them
+// sid and qid are used a lot, and we sort on score, so stash qdir inside msb of qext
+struct ExtensionCandidateCompressed {
+	uint32_t sid, qid, sext, qext_, score;
+	int qdir() const {
+		return qext_ & MSB_ ? REV : FWD;
+	}
+	int qext() const {
+		return qext_ & ~MSB_;
+	}
+	void set_qext(const uint32_t new_qext, const int new_qdir) {
+		qext_ = new_qdir == FWD ? new_qext : new_qext | MSB_;
+	}
+	void set(const ExtensionCandidate& a) {
+		sid = a.sid;
+		qid = a.qid;
+		sext = a.sext;
+		// sdir is forced to FWD, so swap qdir is sdir is REV
+		qext_ = a.qdir == a.sdir ? a.qext : a.qext | MSB_;
+		score = a.score;
+	}
+	void set_swap(const ExtensionCandidate& a) {		// swap s and q
+		sid = a.qid;
+		qid = a.sid;
+		sext = a.qext;
+		qext_ = a.sdir == a.qdir ? a.sext : a.sext | MSB_;
+		score = a.score;
+	}
+	// to check conversions from type int; need to use int64_t in case
+	// int is only int32_t in size (which wouldn't hold uint32_t max)
+	static const int64_t max_value;
+	// account for using MSB for qdir
+	static const int64_t max_qext;
+    private:
+	static const uint32_t MSB_ = 1 << (sizeof(uint32_t) * 8 - 1);
 };
 
 std::istream&

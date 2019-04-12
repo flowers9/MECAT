@@ -302,7 +302,7 @@ void consensus_worker_one_read(const CnsTableItem* const cns_table, uint1* const
 
 void consensus_one_read_m4_pacbio(ConsensusThreadData& ctd, ConsensusPerThreadData &pctd, const idx_t read_id, const idx_t sid, const idx_t eid) {
 	PackedDB& reads(ctd.reads);
-	ExtensionCandidate* overlaps(pctd.candidates);
+	ExtensionCandidate* overlaps((ExtensionCandidate*)pctd.candidates);
 	DiffRunningData* const drd_s(pctd.drd_s);
 	DiffRunningData* drd(NULL);
 	M5Record& m5(pctd.m5);
@@ -349,7 +349,7 @@ void
 consensus_one_read_m4_nanopore(ConsensusThreadData& ctd, ConsensusPerThreadData &pctd, const idx_t read_id, const idx_t sid, const idx_t eid)
 {
 	PackedDB& reads = ctd.reads;
-	ExtensionCandidate* overlaps = pctd.candidates;
+	ExtensionCandidate* overlaps = (ExtensionCandidate*)pctd.candidates;
 	DiffRunningData* drd_s = pctd.drd_s;
 	DiffRunningData* drd = NULL;
 	M5Record& m5 = pctd.m5;
@@ -423,16 +423,16 @@ check_cov_stats(u1_t* cov_stats, int soff, int send)
 
 void consensus_one_read_can_pacbio(ConsensusThreadData& ctd, ConsensusPerThreadData& pctd, const idx_t read_id, const idx_t sid, idx_t eid) {
 	PackedDB& reads(ctd.reads);
-	ExtensionCandidate* candidates(pctd.candidates);
+	ExtensionCandidateCompressed* candidates((ExtensionCandidateCompressed*)pctd.candidates);
 	DiffRunningData* const drd_s(pctd.drd_s);
 	M5Record& m5(pctd.m5);
 	CnsAlns& cns_vec(pctd.cns_alns);
 	std::vector<CnsResult>& cns_results(pctd.cns_results);
-	const idx_t read_size(candidates[sid].ssize);
+	const idx_t ssize(reads.read_size(sid));
 	std::vector<char>& qstr(pctd.query);
 	std::vector<char>& tstr(pctd.target);
-	tstr.resize(read_size);
-	reads.GetSequence(read_id, true, tstr.data(), read_size);
+	tstr.resize(ssize);
+	reads.GetSequence(read_id, true, tstr.data(), ssize);
 	std::string& nqstr(pctd.qaln);
 	std::string& ntstr(pctd.saln);
 	const int min_align_size(ctd.rco.min_align_size);
@@ -441,23 +441,22 @@ void consensus_one_read_can_pacbio(ConsensusThreadData& ctd, ConsensusPerThreadD
 	const int max_added(60);
 	eid = std::min(eid, sid + 200);		// max of 200 extents
 	CnsTableItem* cns_table(pctd.cns_table);
-	std::for_each(cns_table, cns_table + read_size, CnsTableItemCleaner());
+	std::for_each(cns_table, cns_table + ssize, CnsTableItemCleaner());
 	cns_vec.clear();
 	std::set<int> used_ids;
 	u1_t* cov_stats(pctd.id_list);
 	std::fill(cov_stats, cov_stats + MAX_SEQ_SIZE, 0);
 	for (idx_t i(sid); i < eid && num_added < max_added; ++i) {
-		ExtensionCandidate& ec(candidates[i]);
-		r_assert(ec.sdir == FWD);
+		const ExtensionCandidateCompressed& ec(candidates[i]);
 		if (used_ids.find(ec.qid) != used_ids.end()) {
 			continue;
 		}
-		qstr.resize(ec.qsize);
-		reads.GetSequence(ec.qid, ec.qdir == FWD, qstr.data(), ec.qsize);
-		const idx_t sext(ec.sext);
-		const idx_t qext(ec.qdir == FWD ? ec.qext : ec.qsize - 1 - ec.qext);
-		const bool r(GetAlignment(qstr.data(), qext, ec.qsize, tstr.data(), sext, tstr.size(), drd_s, m5, 0.15, min_align_size));
-		if (r && check_ovlp_mapping_range(m5qoff(m5), m5qend(m5), ec.qsize, m5soff(m5), m5send(m5), ec.ssize, min_mapping_ratio)) {
+		const idx_t qsize(reads.read_size(ec.qid));
+		qstr.resize(qsize);
+		reads.GetSequence(ec.qid, ec.qdir() == FWD, qstr.data(), qsize);
+		const idx_t qext(ec.qdir() == FWD ? ec.qext() : qsize - 1 - ec.qext());
+		const bool r(GetAlignment(qstr.data(), qext, qsize, tstr.data(), ec.sext, tstr.size(), drd_s, m5, 0.15, min_align_size));
+		if (r && check_ovlp_mapping_range(m5qoff(m5), m5qend(m5), qsize, m5soff(m5), m5send(m5), ssize, min_mapping_ratio)) {
 			if (check_cov_stats(cov_stats, m5soff(m5), m5send(m5))) {
 				++num_added;
 				used_ids.insert(ec.qid);
@@ -469,7 +468,7 @@ void consensus_one_read_can_pacbio(ConsensusThreadData& ctd, ConsensusPerThreadD
 	}
 	std::vector<MappingRange> mranges, eranges;
 	cns_vec.get_mapping_ranges(mranges);
-	get_effective_ranges(mranges, eranges, read_size, ctd.rco.min_size);
+	get_effective_ranges(mranges, eranges, ssize, ctd.rco.min_size);
 	if (ctd.rco.full_reads) {
 		consensus_worker_one_read(cns_table, pctd.id_list, cns_vec, nqstr, ntstr, eranges, ctd.rco.min_cov, ctd.rco.min_size, read_id, tstr, cns_results);
 	} else {
@@ -477,52 +476,47 @@ void consensus_one_read_can_pacbio(ConsensusThreadData& ctd, ConsensusPerThreadD
 	}
 }
 
-void
-consensus_one_read_can_nanopore(ConsensusThreadData& ctd, ConsensusPerThreadData &pctd, const idx_t read_id, const idx_t sid, const idx_t eid)
-{
-	PackedDB& reads = ctd.reads;
-	ExtensionCandidate* candidates = pctd.candidates;
-	DiffRunningData* drd_s = pctd.drd_s;
-	DiffRunningData* drd = NULL;
-	M5Record& m5 = pctd.m5;
-	CnsAlns& cns_vec = pctd.cns_alns;
-	std::vector<CnsResult>& cns_results = pctd.cns_results;
-	const idx_t read_size = candidates[sid].ssize;
+void consensus_one_read_can_nanopore(ConsensusThreadData& ctd, ConsensusPerThreadData &pctd, const idx_t read_id, const idx_t sid, const idx_t eid) {
+	PackedDB& reads(ctd.reads);
+	ExtensionCandidateCompressed* candidates((ExtensionCandidateCompressed*)pctd.candidates);
+	DiffRunningData* const drd_s(pctd.drd_s);
+	DiffRunningData* drd(NULL);
+	M5Record& m5(pctd.m5);
+	CnsAlns& cns_vec(pctd.cns_alns);
+	std::vector<CnsResult>& cns_results(pctd.cns_results);
+	const idx_t ssize(reads.read_size(sid));
 	std::vector<char>& qstr = pctd.query;
 	std::vector<char>& tstr = pctd.target;
-	tstr.resize(read_size);
-	reads.GetSequence(read_id, true, tstr.data(), read_size);
-	std::string& nqstr = pctd.qaln;
-	std::string& ntstr = pctd.saln;
-	const int min_align_size = ctd.rco.min_align_size;
-	const double min_mapping_ratio = ctd.rco.min_mapping_ratio - 0.02;
-	
-	int num_added = 0;
-    int num_ext = 0;
-    const int max_ext = 200;
-	CnsTableItem* cns_table = pctd.cns_table;
-	std::for_each(cns_table, cns_table + read_size, CnsTableItemCleaner());
+	tstr.resize(ssize);
+	reads.GetSequence(read_id, true, tstr.data(), ssize);
+	std::string& nqstr(pctd.qaln);
+	std::string& ntstr(pctd.saln);
+	const int min_align_size(ctd.rco.min_align_size);
+	const double min_mapping_ratio(ctd.rco.min_mapping_ratio - 0.02);
+	int num_added(0);
+	int num_ext(0);
+	const int max_ext(200);
+	CnsTableItem* cns_table(pctd.cns_table);
+	std::for_each(cns_table, cns_table + ssize, CnsTableItemCleaner());
 	cns_vec.clear();
 	std::set<int> used_ids;
-	u1_t* cov_stats = pctd.id_list;
+	u1_t* const cov_stats(pctd.id_list);
 	std::fill(cov_stats, cov_stats + MAX_SEQ_SIZE, 0);
-	for (idx_t i = sid; i < eid && num_added < MAX_CNS_OVLPS && num_ext < max_ext; ++i)
-	{
-        ++num_ext;
-		ExtensionCandidate& ec = candidates[i];
-		r_assert(ec.sdir == FWD);
-		if (used_ids.find(ec.qid) != used_ids.end()) continue;
-		qstr.resize(ec.qsize);
-		reads.GetSequence(ec.qid, ec.qdir == FWD, qstr.data(), ec.qsize);
-		idx_t qext = ec.qext;
-		idx_t sext = ec.sext;
-		if (ec.qdir == REV) qext = ec.qsize - 1 - qext;
+	for (idx_t i(sid); i < eid && num_added < MAX_CNS_OVLPS && num_ext < max_ext; ++i) {
+		++num_ext;
+		const ExtensionCandidateCompressed& ec(candidates[i]);
+		if (used_ids.find(ec.qid) != used_ids.end()) {
+			continue;
+		}
+		const idx_t qsize(reads.read_size(ec.qid));
+		qstr.resize(qsize);
+		reads.GetSequence(ec.qid, ec.qdir() == FWD, qstr.data(), qsize);
+		const idx_t sext(ec.sext);
+		const idx_t qext(ec.qdir() == FWD ? ec.qext() : qsize - 1 - ec.qext());
 		drd = drd_s;
-		bool r = GetAlignment(qstr.data(), qext, qstr.size(), tstr.data(), sext, tstr.size(), drd, m5, 0.20, min_align_size);
-		if (r && check_ovlp_mapping_range(m5qoff(m5), m5qend(m5), ec.qsize, m5soff(m5), m5send(m5), ec.ssize, min_mapping_ratio))
-		{
-			if (check_cov_stats(cov_stats, m5soff(m5), m5send(m5)))
-			{
+		const bool r(GetAlignment(qstr.data(), qext, qstr.size(), tstr.data(), sext, tstr.size(), drd, m5, 0.20, min_align_size));
+		if (r && check_ovlp_mapping_range(m5qoff(m5), m5qend(m5), qsize, m5soff(m5), m5send(m5), ssize, min_mapping_ratio)) {
+			if (check_cov_stats(cov_stats, m5soff(m5), m5send(m5))) {
 				++num_added;
 				used_ids.insert(ec.qid);
 				normalize_gaps(m5qaln(m5), m5saln(m5), strlen(m5qaln(m5)), nqstr, ntstr, true);
@@ -531,10 +525,8 @@ consensus_one_read_can_nanopore(ConsensusThreadData& ctd, ConsensusPerThreadData
 			}
 		}
 	}
-	
 	std::vector<MappingRange> mranges, eranges;
-	eranges.push_back(MappingRange(0, read_size));
-
+	eranges.push_back(MappingRange(0, ssize));
 	consensus_worker(cns_table, pctd.id_list, cns_vec, nqstr, ntstr, eranges, ctd.rco.min_cov, ctd.rco.min_size, read_id,  cns_results);
 }
 

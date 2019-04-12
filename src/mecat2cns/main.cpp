@@ -107,11 +107,9 @@ int main(int argc, char** argv) {
 			wait_for_files(partition_results);
 		} else {
 			if (rco.input_type == INPUT_TYPE_CAN) {
-				if (rco.preprocess_reads) {
-					const idx_t n_reads(PackedDB::convert_fasta_to_db(rco.reads, "fasta.db", rco.min_size));
-					if (rco.reads_to_correct <= 0 || n_reads < rco.reads_to_correct) {
-						rco.reads_to_correct = n_reads;
-					}
+				const idx_t n_reads(PackedDB::convert_fasta_to_db(rco.reads, "fasta.db", rco.min_size));
+				if (rco.reads_to_correct <= 0 || n_reads < rco.reads_to_correct) {
+					rco.reads_to_correct = n_reads;
 				}
 				if (rco.reorder_reads) {
 					std::vector<idx_t> read_order;	// [old_rid] = new_rid
@@ -124,11 +122,11 @@ int main(int argc, char** argv) {
 					// checkpointing
 					//
 					// XXX - does not set aligns_count on restart
-					make_read_sort_order(rco.m4, "fasta.db", "reads.order", "fasta_ordered.db", rco.reads_to_correct, rco.min_size, rco.min_cov, read_order, read_index, align_counts);
+					make_read_sort_order(rco.m4, "fasta.db", "reads.order", "fasta_ordered.db", rco.reads_to_correct, rco.min_cov, read_order, read_index, align_counts);
 					PackedDB::convert_db_to_ordered_db("fasta.db", "fasta_ordered.db", read_index, read_order);
 					partition_candidates_reorder(rco.m4, rco.batch_size, rco.num_partition_files, rco.reads_to_correct, read_order, align_counts);
 				} else {
-					partition_candidates(rco.m4, rco.batch_size, rco.min_size, rco.num_partition_files, rco.reads_to_correct);
+					partition_candidates(rco.m4, "fasta.db", rco.batch_size, rco.num_partition_files, rco.reads_to_correct);
 				}
 			} else {
 				partition_m4records(rco.m4, rco.min_mapping_ratio - 0.02, rco.batch_size, rco.min_size, rco.num_partition_files);

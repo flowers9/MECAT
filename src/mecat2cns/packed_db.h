@@ -37,23 +37,27 @@ class PackedDB {
 	void open_db(const std::string& filename, idx_t memory_footprint);
 	const char* load_read(idx_t read_id);
 	// returns number of candidates that can be processed
-	idx_t load_reads(const ExtensionCandidate* ec_list, idx_t nec);
+	idx_t load_reads(const ExtensionCandidateCompressed* ec_list, idx_t nec);
 	void GetSequence(const idx_t id, const bool forward, char* const seq, const idx_t size) const {
-		r_assert(size == seq_idx[id].size);
+		const SeqIndex &si(seq_idx[id]);
+		r_assert(size == si.size);
 		if (forward) {
-			const idx_t offset(seq_idx[id].memory_offset);
-			for (idx_t i(0); i < size; ++i) {
+			const idx_t offset(si.memory_offset);
+			for (idx_t i(0); i < si.size; ++i) {
 				seq[i] = get_char(offset + i);
 			}
 		} else {
-			const idx_t offset(seq_idx[id].memory_offset + size - 1);
-			for (idx_t i(0); i < size; ++i) {
+			const idx_t offset(si.memory_offset + si.size - 1);
+			for (idx_t i(0); i < si.size; ++i) {
 				seq[i] = 3 - get_char(offset - i);
 			}
 		}
 	}
 	idx_t num_reads() const {
 		return seq_idx.size();
+	}
+	idx_t read_size(const idx_t read_id) const {
+		return seq_idx[read_id].size;
 	}
     private:
 	static void set_char(u1_t* const p, const idx_t idx, const u1_t c) {

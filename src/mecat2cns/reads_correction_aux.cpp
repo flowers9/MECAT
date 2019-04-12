@@ -94,3 +94,20 @@ void allocate_ecs(ConsensusThreadData& data, ExtensionCandidate* const ec_list, 
 		data.data[k].candidates = ec_list + start;
 	}
 }
+
+void allocate_ecs(ConsensusThreadData& data, ExtensionCandidateCompressed* const ec_list, const idx_t nec) {
+	const int n(data.rco.num_threads);
+	// split by number of ec's, rather than reads, since reads ids
+	// are not contiguous and we could get empty lists
+	for (idx_t i(0), k(0); k != n; ++k) {
+		const idx_t start(i);
+		// drop fractions here, as we'll likely add a few more ec's below
+		i += (nec - i) / (n - k);
+		if (i != nec) {			// include all ec's for the last read
+			const int final_sid(ec_list[i].sid);
+			for (++i; i != nec && ec_list[i].sid == final_sid; ++i) { }
+		}
+		data.data[k].num_candidates = i - start;
+		data.data[k].candidates = ec_list + start;
+	}
+}

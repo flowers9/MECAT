@@ -13,7 +13,7 @@ static void* reads_correction_func_can(void* const arg) {
 	ConsensusThreadData& data(*(static_cast<ConsensusThreadData*>(arg)));
 	const int tid(data.get_thread_id());
 	ConsensusPerThreadData& pdata(data.data[tid]);
-	const ExtensionCandidate* const candidates(pdata.candidates);
+	const ExtensionCandidateCompressed* const candidates((ExtensionCandidateCompressed*)pdata.candidates);
 	idx_t i(pdata.next_candidate);
 	if (data.rco.tech == TECH_PACBIO) {
 		while (i != pdata.num_candidates) {
@@ -59,7 +59,7 @@ class EC_Index {	// offset into ec_list (and number of ecs) for each read id
 // ecs per pass, with limited read space; also filters list to exclude
 // candidates of reads with low coverage
 
-static ExtensionCandidate* reorder_candidates(ExtensionCandidate* const ec_list, idx_t& nec, const idx_t num_reads, const int min_cov) {
+static ExtensionCandidateCompressed* reorder_candidates(ExtensionCandidateCompressed* const ec_list, idx_t& nec, const idx_t num_reads, const int min_cov) {
 	idx_t total_ec(0);
 	std::vector<EC_Index> index(num_reads);
 	// index existing list by sid
@@ -75,7 +75,7 @@ static ExtensionCandidate* reorder_candidates(ExtensionCandidate* const ec_list,
 			total_ec += count;
 		}
 	}
-	ExtensionCandidate* new_list(new ExtensionCandidate[total_ec]);
+	ExtensionCandidateCompressed* new_list(new ExtensionCandidateCompressed[total_ec]);
 	// generate the new read order
 	std::vector<char> used(num_reads, 0);
 	std::vector<idx_t> new_order;
@@ -117,7 +117,7 @@ static ExtensionCandidate* reorder_candidates(ExtensionCandidate* const ec_list,
 	for (; a != end_a; ++a) {
 		const EC_Index& b(index[*a]);
 		if (b.count) {
-			memcpy(new_list + pos, ec_list + b.offset, sizeof(ExtensionCandidate) * b.count);
+			memcpy(new_list + pos, ec_list + b.offset, sizeof(ExtensionCandidateCompressed) * b.count);
 			pos += b.count;
 		}
 	}
@@ -130,8 +130,8 @@ static ExtensionCandidate* reorder_candidates(ExtensionCandidate* const ec_list,
 // load and sort partition data, assign to threads, start threads
 static void consensus_one_partition_can(const char* const m4_file_name, ConsensusThreadData& data) {
 	idx_t nec;
-	ExtensionCandidate* ec_list(load_partition_data<ExtensionCandidate>(m4_file_name, nec));
-	std::sort(ec_list, ec_list + nec, CmpExtensionCandidateBySidAndScore());
+	ExtensionCandidateCompressed* ec_list(load_partition_data<ExtensionCandidateCompressed>(m4_file_name, nec));
+	std::sort(ec_list, ec_list + nec, CmpExtensionCandidateCompressedBySidAndScore());
 	// if we're memory limited and we didn't already reorder, do it here;
 	// spend some cpu time to reduce number of passes
 	if (data.rco.read_buffer_size && !data.rco.reorder_reads) {
@@ -194,11 +194,7 @@ int reads_correction_can(ReadsCorrectionOptions& rco) {
 	std::vector<std::string> partition_file_vec;
 	load_partition_files_info(idx_file_name.c_str(), partition_file_vec);
 	PackedDB reads;
-	if (rco.preprocess_reads) {			// load from converted fasta file
-		reads.open_db(rco.reorder_reads ? "fasta_ordered.db" : "fasta.db", rco.read_buffer_size);
-	} else {						// load from fasta file
-		reads.load_fasta_db(rco.reads);
-	}
+	reads.open_db(rco.reorder_reads ? "fasta_ordered.db" : "fasta.db", rco.read_buffer_size);
 	if (rco.job_index != -1) {
 		return reads_correction_can_p(rco, partition_file_vec, reads);
 	} else {

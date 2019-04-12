@@ -148,3 +148,6 @@ std::ostream& operator<<(std::ostream& out, const ReferenceMapping& rm)
    return out;
 }
 */
+
+const int64_t ExtensionCandidateCompressed::max_value = std::numeric_limits<uint32_t>::max();
+const int64_t ExtensionCandidateCompressed::max_qext = std::numeric_limits<uint32_t>::max() >> 1;

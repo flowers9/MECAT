@@ -135,12 +135,32 @@ struct CmpExtensionCandidateBySidAndScore {
 	}
 };
 
+struct CmpExtensionCandidateCompressedBySidAndScore {
+	bool operator()(const ExtensionCandidateCompressed& a, const ExtensionCandidateCompressed& b) {
+		if (a.sid != b.sid) {			// primary sort
+			return a.sid < b.sid;		// for splitting up in allocate_ecs()
+		} else if (a.score != b.score) {	// secondary sort
+			return b.score < a.score;	// process best ones first
+		} else if (a.qid != b.qid) {
+			return a.qid < b.qid;
+		} else if (a.qext() != b.qext()) {
+			return a.qext() < b.qext();
+		} else if (a.sext != b.sext) {		// tertiary sort
+			return a.sext < b.sext;		// make sorting consistent
+		} else {
+			return a.qdir() < b.qdir();
+		}
+	}
+};
+
 class ConsensusPerThreadData {
     public:
 	// num_candidates, candidates initialized by allocate_ecs()
 	// next_candidate initialized by ConsensusThreadData::restart()
 	idx_t num_candidates, next_candidate;
-	ExtensionCandidate* candidates;
+	// this is ExtensionCandidate for m4 runs, ExtensionCandidateCompressed
+	// for candidate runs (to reduce memory usage)
+	void* candidates;
 	ns_banded_sw::DiffRunningData* drd_s;
 	ns_banded_sw::DiffRunningData* drd_l;
 	CnsTableItem cns_table[MAX_SEQ_SIZE];
@@ -280,5 +300,6 @@ class ConsensusThreadData {
 void normalize_gaps(const char* qstr, const char* tstr, const idx_t aln_size, std::string& qnorm, std::string& tnorm, bool push);
 
 void allocate_ecs(ConsensusThreadData &data, ExtensionCandidate* ec_list, idx_t nec);
+void allocate_ecs(ConsensusThreadData &data, ExtensionCandidateCompressed* ec_list, idx_t nec);
 
 #endif // _READS_CORRECTION_AUX_H

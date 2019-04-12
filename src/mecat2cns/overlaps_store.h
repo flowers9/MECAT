@@ -18,7 +18,6 @@ template <class T> class PartitionResultsWriter {
 	const int kNumFiles;	// effective open file limit
 	int kStoreSize;
 	int num_open_files;
-	int num_reads;
 	PODArray<T>* results;	// can't use vector<>, causes memory corruption
 	std::ofstream* files;	// can't use vector<>, non-copyable
 	std::vector<std::string> file_names;
@@ -26,7 +25,7 @@ template <class T> class PartitionResultsWriter {
     public:
 	// can't make kNumFiles static, as sysconf() is run-time only;
 	// leave room for stdin, stdout, stderr, a few others
-	explicit PartitionResultsWriter(const int num_files) : kNumFiles(num_files > 0 ? num_files : sysconf(_SC_OPEN_MAX) - 10), kStoreSize(0), num_open_files(0), num_reads(0), results(0), files(0) { }
+	explicit PartitionResultsWriter(const int num_files) : kNumFiles(num_files > 0 ? num_files : sysconf(_SC_OPEN_MAX) - 10), kStoreSize(0), num_open_files(0), results(0), files(0) { }
 	~PartitionResultsWriter() {
 		CloseFiles();
 	}
@@ -98,7 +97,7 @@ template <class T> class PartitionResultsWriter {
 		if (!in) {
 			return 0;
 		}
-		in >> batch_start_ >> num_open_files >> num_reads >> input_pos;
+		in >> batch_start_ >> num_open_files >> input_pos;
 		if (!in) {
 			ERROR("Read error while restoring checkpoint from %s", ckpt_file_.c_str());
 		}
@@ -123,7 +122,7 @@ template <class T> class PartitionResultsWriter {
 			LOG(stderr, "Checkpoint failed: couldn't open %s", ckpt_file_tmp_.c_str());
 			return;
 		}
-		out << batch_start_ << " " << num_open_files << " " << num_reads << " " << input_pos << "\n";
+		out << batch_start_ << " " << num_open_files << " " << input_pos << "\n";
 		if (!out) {
 			LOG(stderr, "Checkpoint failed: write failed: %s", ckpt_file_tmp_.c_str());
 			return;

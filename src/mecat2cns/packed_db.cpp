@@ -231,7 +231,7 @@ const char* PackedDB::load_read(const idx_t read_id) {
 	return (char*)pac;
 }
 
-idx_t PackedDB::load_reads(const ExtensionCandidate* const ec_list, const idx_t nec) {
+idx_t PackedDB::load_reads(const ExtensionCandidateCompressed* const ec_list, const idx_t nec) {
 	if (!pstream.is_open()) {	// all in memory already
 		return nec;
 	}
