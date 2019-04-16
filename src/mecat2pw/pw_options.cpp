@@ -9,9 +9,9 @@
 
 static const int kDefaultNumThreads = 1;
 static const int kDefaultNumCandidates = 100;
-static const int kDefaultAlignSizePacbio = 2000;
+static const int kDefaultAlignSizePacbio = 1000;
 static const int kDefaultAlignSizeNanopore = 500;
-static const int kDefaultKmerMatchPacbio = 4;
+static const int kDefaultKmerMatchPacbio = 3;
 static const int kDefaultKmerMatchNanopore = 2;
 
 void

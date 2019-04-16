@@ -28,7 +28,7 @@
 
 static int maxc = 100;
 static int output_gapped_start_point = 1;
-static int kmer_size = 13;
+static int kmer_size = 15;
 static const double ddfs_cutoff_pacbio = 0.25;
 static const double ddfs_cutoff_nanopore = 0.25;
 static double ddfs_cutoff = ddfs_cutoff_pacbio;

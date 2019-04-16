@@ -9,10 +9,10 @@
 
 static int input_type_pacbio		= 1;
 static int num_threads_pacbio		= 1;
-static double mapping_ratio_pacbio	= 0.9;
-static int align_size_pacbio		= 2000;
-static int cov_pacbio			= 6;
-static int min_size_pacbio		= 5000;
+static double mapping_ratio_pacbio	= 0.6;
+static int align_size_pacbio		= 1000;
+static int cov_pacbio			= 4;
+static int min_size_pacbio		= 2000;
 static bool print_usage_pacbio		= false;
 static int tech_pacbio			= TECH_PACBIO;
 
@@ -31,7 +31,7 @@ static int full_reads = 0;
 static idx_t read_buffer_size = 0;
 static int preprocess_reads = 0;
 static int reorder_reads = 0;
-static size_t batch_size = 8589934592;		// 8 GB
+static idx_t batch_size = 8589934592;		// 8 GB
 
 static const char input_type_n    = 'i';
 static const char num_threads_n   = 't';
@@ -85,22 +85,22 @@ make_options(const ConsensusOptions& options)
 	if (options.num_threads > -1) {
 		cmd << " -" << num_threads_n << " " << options.num_threads;
 	}
-	if (options.batch_size) {
+	if (options.batch_size && options.batch_size != batch_size) {
 		cmd << " -" << batch_size_n << " " << options.batch_size;
 	}
-	if (options.min_mapping_ratio >= 0) {
+	if (options.min_mapping_ratio >= 0 && ((options.tech == TECH_PACBIO && options.min_mapping_ratio != mapping_ratio_pacbio) || (options.tech != TECH_PACBIO && options.min_mapping_ratio != mapping_ratio_nanopore))) {
 		cmd << " -" << mapping_ratio_n << " " << options.min_mapping_ratio;
 	}
-	if (options.min_align_size >= 0) {
+	if (options.min_align_size >= 0 && ((options.tech == TECH_PACBIO && options.min_align_size != align_size_pacbio) || (options.tech != TECH_PACBIO && options.min_align_size != align_size_nanopore))) {
 		cmd << " -" << align_size_n << " " << options.min_align_size;
 	}
-	if (options.min_cov >= 0) {
+	if (options.min_cov >= 0 && ((options.tech == TECH_PACBIO && options.min_cov != cov_pacbio) || (options.tech != TECH_PACBIO && options.min_cov != cov_nanopore))) {
 		cmd << " -" << cov_n << " " << options.min_cov;
 	}
-	if (options.min_size >= 0) {
+	if (options.min_size >= 0 && ((options.tech == TECH_PACBIO && options.min_size != min_size_pacbio) || (options.tech != TECH_PACBIO && options.min_size != min_size_nanopore))) {
 		cmd << " -" << min_size_n << " " << options.min_size;
 	}
-	if (options.num_partition_files > 0) {
+	if (options.num_partition_files > 0 && options.num_partition_files != num_partition_files) {
 		cmd << " -" << num_partition_files_n << " " << options.num_partition_files;
 	}
 	if (options.grid_options != NULL) {

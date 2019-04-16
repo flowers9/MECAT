@@ -104,9 +104,12 @@ void partition_candidates(const std::string& input, const std::string& pac_prefi
 	if (stat(input.c_str(), &buf) == -1) {
 		ERROR("Could not get file size: %s", input.c_str());
 	}
-	// each candidate line takes approximately 44 characters, but go with 32;
+	// each candidate line takes on average 44 characters, but go with 32;
 	// each one produces two candidates (forward and reverse)
 	const idx_t num_batches(buf.st_size / 32 * 2 * sizeof(ExtensionCandidateCompressed) / batch_size);
+	// separate them by read id on this pass, as we don't know how
+	// many candidates each read is part of; we're assuming an even
+	// distribution on average
 	const idx_t reads_per_batch((num_reads + num_batches - 1) / num_batches);
 	std::vector<idx_t> read_sizes;
 	PackedDB::read_sizes(pac_prefix, read_sizes);
@@ -142,10 +145,14 @@ void partition_candidates(const std::string& input, const std::string& pac_prefi
 			if (!read_sizes[ec.sid] || !read_sizes[ec.qid]) {
 				continue;
 			}
+			// make sure these match before tossing them
 			r_assert(ec.ssize == read_sizes[ec.sid] && ec.qsize == read_sizes[ec.qid]);
+			// as variable sizes may be different, make sure the ones
+			// we read in can be safely stored
 			r_assert(ec.sid <= ExtensionCandidateCompressed::max_value);
 			r_assert(ec.qid <= ExtensionCandidateCompressed::max_value);
 			r_assert(ec.sext <= ExtensionCandidateCompressed::max_value);
+			// qext is one bit smaller than the others
 			r_assert(ec.qext <= ExtensionCandidateCompressed::max_qext);
 			r_assert(ec.score <= ExtensionCandidateCompressed::max_value);
 			if (L <= ec.sid && ec.sid < R) {

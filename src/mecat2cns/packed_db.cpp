@@ -180,7 +180,7 @@ void PackedDB::open_db(const std::string& path, const idx_t size) {
 		ERROR("Could not seek to end of fasta db to get size\n");
 	}
 	const idx_t file_size(pstream.tellg());
-	max_db_size = std::min(file_size, size);
+	max_db_size = size ? std::min(file_size, size) : file_size;
 	if (max_db_size) {
 		safe_calloc(pac, u1_t, max_db_size);
 	}

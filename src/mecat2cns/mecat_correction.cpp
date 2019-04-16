@@ -308,7 +308,7 @@ void consensus_one_read_m4_pacbio(ConsensusThreadData& ctd, ConsensusPerThreadDa
 	M5Record& m5(pctd.m5);
 	CnsAlns& cns_vec(pctd.cns_alns);
 	std::vector<CnsResult>& cns_results(pctd.cns_results);
-	const idx_t read_size(overlaps[sid].ssize);
+	const idx_t read_size(overlaps[read_id].ssize);
 	std::vector<char>& qstr(pctd.query);
 	std::vector<char>& tstr(pctd.target);
 	tstr.resize(read_size);
@@ -355,7 +355,7 @@ consensus_one_read_m4_nanopore(ConsensusThreadData& ctd, ConsensusPerThreadData 
 	M5Record& m5 = pctd.m5;
 	CnsAlns& cns_vec = pctd.cns_alns;
 	std::vector<CnsResult>& cns_results = pctd.cns_results;
-	const idx_t read_size = overlaps[sid].ssize;
+	const idx_t read_size = overlaps[read_id].ssize;
 	std::vector<char>& qstr = pctd.query;
 	std::vector<char>& tstr = pctd.target;
 	tstr.resize(read_size);
@@ -422,13 +422,13 @@ check_cov_stats(u1_t* cov_stats, int soff, int send)
 }
 
 void consensus_one_read_can_pacbio(ConsensusThreadData& ctd, ConsensusPerThreadData& pctd, const idx_t read_id, const idx_t sid, idx_t eid) {
-	PackedDB& reads(ctd.reads);
+	const PackedDB& reads(ctd.reads);
 	ExtensionCandidateCompressed* candidates((ExtensionCandidateCompressed*)pctd.candidates);
 	DiffRunningData* const drd_s(pctd.drd_s);
 	M5Record& m5(pctd.m5);
 	CnsAlns& cns_vec(pctd.cns_alns);
 	std::vector<CnsResult>& cns_results(pctd.cns_results);
-	const idx_t ssize(reads.read_size(sid));
+	const idx_t ssize(reads.read_size(read_id));
 	std::vector<char>& qstr(pctd.query);
 	std::vector<char>& tstr(pctd.target);
 	tstr.resize(ssize);
@@ -443,7 +443,7 @@ void consensus_one_read_can_pacbio(ConsensusThreadData& ctd, ConsensusPerThreadD
 	CnsTableItem* cns_table(pctd.cns_table);
 	std::for_each(cns_table, cns_table + ssize, CnsTableItemCleaner());
 	cns_vec.clear();
-	std::set<int> used_ids;
+	std::set<idx_t> used_ids;
 	u1_t* cov_stats(pctd.id_list);
 	std::fill(cov_stats, cov_stats + MAX_SEQ_SIZE, 0);
 	for (idx_t i(sid); i < eid && num_added < max_added; ++i) {
@@ -484,7 +484,7 @@ void consensus_one_read_can_nanopore(ConsensusThreadData& ctd, ConsensusPerThrea
 	M5Record& m5(pctd.m5);
 	CnsAlns& cns_vec(pctd.cns_alns);
 	std::vector<CnsResult>& cns_results(pctd.cns_results);
-	const idx_t ssize(reads.read_size(sid));
+	const idx_t ssize(reads.read_size(read_id));
 	std::vector<char>& qstr = pctd.query;
 	std::vector<char>& tstr = pctd.target;
 	tstr.resize(ssize);
