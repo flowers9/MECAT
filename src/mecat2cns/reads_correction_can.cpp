@@ -1,8 +1,9 @@
 #include "reads_correction_can.h"
 
 #include <cstring>
-#include <string>	// string
+#include <limits>	// numeric_limits<>
 #include <sstream>
+#include <string>	// string
 
 #include "MECAT_AlnGraphBoost.H"
 #include "mecat_correction.h"
@@ -47,6 +48,41 @@ static void* reads_correction_func_can(void* const arg) {
 	return NULL;
 }
 
+struct CmpExtensionCandidateCompressedBySid {
+	bool operator()(const ExtensionCandidateCompressed& a, const ExtensionCandidateCompressed& b) {
+		return a.sid < b.sid;
+	}
+};
+
+// do full ordering, but using new rid instead of old
+class OrderCmp {
+    public:
+	explicit OrderCmp(const std::vector<idx_t>& new_order, const idx_t num_reads) : old_rid_to_new_(num_reads, std::numeric_limits<idx_t>::max()) {
+		for (size_t i(0); i != new_order.size(); ++i) {
+			old_rid_to_new_[new_order[i]] = i;
+		}
+	}
+	~OrderCmp() { }
+	bool operator()(const ExtensionCandidateCompressed& a, const ExtensionCandidateCompressed& b) {
+		if (a.sid != b.sid) {			// primary sort
+							// for splitting up in allocate_ecs()
+			return old_rid_to_new_[a.sid] < old_rid_to_new_[b.sid];
+		} else if (a.score != b.score) {	// secondary sort
+			return b.score < a.score;       // process best ones first
+		} else if (a.qid != b.qid) {		// group ties by id
+			return a.qid < b.qid;		// (doesn't matter if new or old)
+		} else if (a.qext() != b.qext()) {
+			return a.qext() < b.qext();
+		} else if (a.sext != b.sext) {		// tertiary sort
+			return a.sext < b.sext;		// make sorting consistent
+		} else {
+			return a.qdir() < b.qdir();
+		}
+	}
+    private:
+	std::vector<idx_t> old_rid_to_new_;
+};
+
 class EC_Index {	// offset into ec_list (and number of ecs) for each read id
     public:
 	idx_t offset, count;
@@ -59,13 +95,18 @@ class EC_Index {	// offset into ec_list (and number of ecs) for each read id
 // ecs per pass, with limited read space; also filters list to exclude
 // candidates of reads with low coverage
 
-static ExtensionCandidateCompressed* reorder_candidates(ExtensionCandidateCompressed* const ec_list, idx_t& nec, const idx_t num_reads, const int min_cov) {
+static void reorder_candidates(ExtensionCandidateCompressed* const ec_list, idx_t& nec, const idx_t reads_to_correct, const idx_t num_reads, const int min_cov) {
+	// allow us to easily access a given sid's aligns
+	std::sort(ec_list, ec_list + nec, CmpExtensionCandidateCompressedBySid());
 	idx_t total_ec(0);
-	std::vector<EC_Index> index(num_reads);
+	std::vector<EC_Index> index(reads_to_correct);
 	// index existing list by sid
 	for (idx_t i(0); i != nec;) {
-		const idx_t start(i);
 		const idx_t sid(ec_list[i].sid);
+		if (sid >= reads_to_correct) {
+			break;
+		}
+		const idx_t start(i);
 		for (++i; i != nec && ec_list[i].sid == sid; ++i) { }
 		// make sure we have enough coverage
 		// (don't need to check size, that happened during partition)
@@ -75,17 +116,16 @@ static ExtensionCandidateCompressed* reorder_candidates(ExtensionCandidateCompre
 			total_ec += count;
 		}
 	}
-	ExtensionCandidateCompressed* new_list(new ExtensionCandidateCompressed[total_ec]);
 	// generate the new read order
 	std::vector<char> used(num_reads, 0);
-	std::vector<idx_t> new_order;
+	std::vector<idx_t> new_order;	// [new_sid] = old_sid
 	new_order.reserve(num_reads);
 	idx_t next_unused(0);
 	size_t next_search(0);
 	for (;;) {
 		// skip over used reads, reads with no alignments
-		for (; next_unused != num_reads && (used[next_unused] || index[next_unused].count == 0); ++next_unused) { }
-		if (next_unused == num_reads) {
+		for (; next_unused != reads_to_correct && (used[next_unused] || index[next_unused].count == 0); ++next_unused) { }
+		if (next_unused == reads_to_correct) {
 			break;
 		}
 		used[next_unused] = 1;
@@ -93,52 +133,38 @@ static ExtensionCandidateCompressed* reorder_candidates(ExtensionCandidateCompre
 		// add all reads aligned to, and aligned to those, and so on
 		for (; next_search != new_order.size(); ++next_search) {
 			const idx_t sid(new_order[next_search]);
-			const EC_Index& a(index[sid]);
-			// only include reads that align to this one if we plan to
-			// actually run those alignments (that is, if it has sufficient
-			// coverage)
-			if (a.count >= min_cov) {
-				idx_t i(a.offset);
-				const idx_t end_i(i + a.count);
-				for (; i != end_i; ++i) {
-					const idx_t qid(ec_list[i].qid);
-					if (!used[qid]) {
-						used[qid] = 1;
-						new_order.push_back(qid);
+			if (sid < reads_to_correct) {
+				const EC_Index& a(index[sid]);
+				if (a.count) {
+					idx_t i(a.offset);
+					const idx_t end_i(i + a.count);
+					for (; i != end_i; ++i) {
+						const idx_t qid(ec_list[i].qid);
+						if (!used[qid]) {
+							used[qid] = 1;
+							new_order.push_back(qid);
+						}
 					}
 				}
 			}
 		}
 	}
-	// copy over the ecs to the new list in the new order
-	idx_t pos(0);
-	std::vector<idx_t>::const_iterator a(new_order.begin());
-	const std::vector<idx_t>::const_iterator end_a(new_order.end());
-	for (; a != end_a; ++a) {
-		const EC_Index& b(index[*a]);
-		if (b.count) {
-			memcpy(new_list + pos, ec_list + b.offset, sizeof(ExtensionCandidateCompressed) * b.count);
-			pos += b.count;
-		}
-	}
-	delete[] ec_list;
-	// only do this at the end, once we know we'll successfully complete
+	// re-sort ec_list with new order (note that coverage-excluded
+	// ec's will sort last, so we also change nec to exclude them)
+	OrderCmp new_rid_order(new_order, num_reads);
+	std::sort(ec_list, ec_list + nec, new_rid_order);
 	nec = total_ec;
-	return new_list;
 }
 
 // load and sort partition data, assign to threads, start threads
 static void consensus_one_partition_can(const char* const m4_file_name, ConsensusThreadData& data) {
 	idx_t nec;
 	ExtensionCandidateCompressed* ec_list(load_partition_data<ExtensionCandidateCompressed>(m4_file_name, nec));
-	std::sort(ec_list, ec_list + nec, CmpExtensionCandidateCompressedBySidAndScore());
-	// if we're memory limited and we didn't already reorder, do it here;
-	// spend some cpu time to reduce number of passes
+	// if we're memory limited spend some cpu time to reduce number of passes
 	if (data.rco.read_buffer_size) {
-		// don't die if we run out of memory, just do it the slow way
-		try {
-			ec_list = reorder_candidates(ec_list, nec, data.reads.num_reads(), data.rco.min_cov);
-		} catch (std::bad_alloc &except) { }
+		reorder_candidates(ec_list, nec, data.rco.reads_to_correct, data.reads.num_reads(), data.rco.min_cov);
+	} else {
+		std::sort(ec_list, ec_list + nec, CmpExtensionCandidateCompressedBySidAndScore());
 	}
 	pthread_t thread_ids[data.rco.num_threads];
 	while (data.ec_offset != nec) {
