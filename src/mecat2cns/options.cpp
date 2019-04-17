@@ -29,8 +29,6 @@ static int default_tech = TECH_PACBIO;
 static int num_partition_files = 0;
 static int full_reads = 0;
 static idx_t read_buffer_size = 0;
-static int preprocess_reads = 0;
-static int reorder_reads = 0;
 static idx_t batch_size = 8589934592;		// 8 GB
 
 static const char input_type_n    = 'i';
@@ -50,8 +48,6 @@ static const char reads_to_correct_n = 'R';
 static const char grid_start_delay_n = 'D';
 static const char full_reads_n    = 'F';
 static const char read_buffer_size_n = 'b';
-static const char preprocess_reads_n = 'P';
-static const char reorder_reads_n = 'O';
 
 void
 print_pacbio_default_options()
@@ -124,12 +120,6 @@ make_options(const ConsensusOptions& options)
 	if (options.read_buffer_size) {
 		cmd << " -" << read_buffer_size_n << " " << options.read_buffer_size;
 	}
-	if (options.preprocess_reads) {
-		cmd << " -" << preprocess_reads_n;
-	}
-	if (options.reorder_reads) {
-		cmd << " -" << reorder_reads_n;
-	}
 	cmd << " " << options.m4;
 	cmd << " " << options.reads;
 	cmd << " " << options.corrected_reads;
@@ -156,8 +146,6 @@ void print_usage(const char* prog) {
 		<< "-" << grid_start_delay_n << " <Integer>\tseconds to delay between starting grid jobs\n"
 		<< "-" << full_reads_n << "\t\toutput full reads, not just the corrected parts\n"
 		<< "-" << read_buffer_size_n << " <Integer>\tbytes of memory to buffer reads [no buffer]\n"
-		<< "-" << preprocess_reads_n << "\t\tconvert reads from fasta to fasta db before processing (implied by -" << read_buffer_size_n << " and -" << reorder_reads_n << ")\n"
-		<< "-" << reorder_reads_n << "\t\treorder reads before processing to improve memory efficiency\n"
 		<< "-" << usage_n << "\t\tprint usage info\n"
 		<< "\n"
 		<< "If 'x' is set to be '0' (pacbio), then the other options have the following default values: \n";
@@ -180,8 +168,6 @@ ConsensusOptions init_consensus_options(const int tech) {
 	t.grid_start_delay	= 0;
 	t.full_reads		= full_reads;
 	t.read_buffer_size	= read_buffer_size;
-	t.preprocess_reads	= preprocess_reads;
-	t.reorder_reads		= reorder_reads;
 	t.batch_size            = batch_size;
 	if (tech == TECH_PACBIO) {
 		t.input_type            = input_type_pacbio;
@@ -238,7 +224,7 @@ int parse_arguments(int argc, char* argv[], ConsensusOptions& t) {
 	t = init_consensus_options(tech);
 	int opt_char;
 	opterr = 0;
-	while ((opt_char = getopt(argc, argv, "i:t:p:r:a:c:l:x:hG:I:n:R:S:D:k:Fb:PO")) != -1) {
+	while ((opt_char = getopt(argc, argv, "i:t:p:r:a:c:l:x:hG:I:n:R:S:D:k:Fb:")) != -1) {
 		switch (opt_char) {
 			case input_type_n:
 				if (optarg[0] == '0') {
@@ -296,13 +282,6 @@ int parse_arguments(int argc, char* argv[], ConsensusOptions& t) {
 				break;
 			case read_buffer_size_n:
 				t.read_buffer_size = atoll(optarg);
-				// implies preprocess_reads, so fall through here
-			case preprocess_reads_n:
-				t.preprocess_reads = 1;
-				break;
-			case reorder_reads_n:
-				t.preprocess_reads = 1;
-				t.reorder_reads = 1;
 				break;
 			case '?':
 				std::cerr << "unrecognised option '" << char(optopt) << "'\n";

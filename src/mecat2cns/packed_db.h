@@ -32,7 +32,6 @@ class PackedDB {
 	static void create_index(const std::string& output_prefix, const std::vector<std::pair<idx_t, idx_t> >& index);
 	static void read_index(const std::string& output_prefix, std::vector<std::pair<idx_t, idx_t> >& index);
 	static void read_sizes(const std::string& output_prefix, std::vector<idx_t>& sizes);
-	static void convert_db_to_ordered_db(const std::string& input_prefix, const std::string& output_prefix, const std::vector<std::pair<idx_t, idx_t> >& index, const std::vector<idx_t>& read_order);
 	// opens data file, reads in index file
 	void open_db(const std::string& filename, idx_t memory_footprint);
 	const char* load_read(idx_t read_id);

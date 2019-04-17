@@ -134,7 +134,7 @@ static void consensus_one_partition_can(const char* const m4_file_name, Consensu
 	std::sort(ec_list, ec_list + nec, CmpExtensionCandidateCompressedBySidAndScore());
 	// if we're memory limited and we didn't already reorder, do it here;
 	// spend some cpu time to reduce number of passes
-	if (data.rco.read_buffer_size && !data.rco.reorder_reads) {
+	if (data.rco.read_buffer_size) {
 		// don't die if we run out of memory, just do it the slow way
 		try {
 			ec_list = reorder_candidates(ec_list, nec, data.reads.num_reads(), data.rco.min_cov);
@@ -194,7 +194,7 @@ int reads_correction_can(ReadsCorrectionOptions& rco) {
 	std::vector<std::string> partition_file_vec;
 	load_partition_files_info(idx_file_name.c_str(), partition_file_vec);
 	PackedDB reads;
-	reads.open_db(rco.reorder_reads ? "fasta_ordered.db" : "fasta.db", rco.read_buffer_size);
+	reads.open_db("fasta.db", rco.read_buffer_size);
 	if (rco.job_index != -1) {
 		return reads_correction_can_p(rco, partition_file_vec, reads);
 	} else {
