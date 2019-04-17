@@ -524,6 +524,6 @@ print_volume_names(volume_names_t* vn)
 	for (i = 0; i < num_vols; ++i)
 	{
 		const char* name = get_vol_name(vn, i);
-		fprintf(stderr, "%s\n", name);
+		std::cerr << name << "\n";
 	}
 }

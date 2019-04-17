@@ -149,7 +149,7 @@ void print_usage(const char* prog) {
 		<< "-" << align_size_n << " <Integer>\tminimum overlap size\n"
 		<< "-" << cov_n << " <Integer>\tminimum coverage under consideration\n"
 		<< "-" << min_size_n << " <Integer>\tminimum length of corrected sequence\n"
-		<< "-" << num_partition_files_n << " <Integer>\tnumber of partition files when partitioning overlap results (if 0, then use system limit)\n"
+		<< "-" << num_partition_files_n << " <Integer>\tnumber of partition files per pass when partitioning overlap results (if 0, then use system limit)\n"
 		<< "-" << grid_options_n << " <String>\toptions for grid submission\n"
 		<< "-" << grid_options_split_n << " <String>\toptions for split grid submission\n"
 		<< "-" << reads_to_correct_n << " <Integer>\tnumber of reads to correct [all]\n"
@@ -211,7 +211,7 @@ int detect_tech(int argc, char* argv[]) {
 	for (int i = 0; i < argc; ++i) {
 		if (strcmp(tech_nstr, argv[i]) == 0) {
 			if (i + 1 == argc) {
-				fprintf(stderr, "argument to option '%c' is missing.\n", tech_n);
+				std::cerr << "argument to option '" << tech_n << "' is missing.\n";
 				t = -1;
 			}
 			std::cout << tech_nstr << "\n";
@@ -220,7 +220,7 @@ int detect_tech(int argc, char* argv[]) {
 			} else if (argv[i + 1][0] == '1') {
 				t = TECH_NANOPORE;
 			} else {
-				fprintf(stderr, "invalid argument to option '%c': %s\n", tech_n, argv[i + 1]);
+				std::cerr << "invalid argument to option '" << tech_n << "': " << argv[i + 1] << "\n";
 				t = -1;
 			}
 			break;
@@ -230,14 +230,13 @@ int detect_tech(int argc, char* argv[]) {
 }
 
 int parse_arguments(int argc, char* argv[], ConsensusOptions& t) {
-	bool parse_success = true;
-	int tech = detect_tech(argc, argv);
+	bool parse_success(true);
+	const int tech(detect_tech(argc, argv));
 	if (tech == -1) {
 		return 1;
 	} 
 	t = init_consensus_options(tech);
 	int opt_char;
-	char err_char;
 	opterr = 0;
 	while ((opt_char = getopt(argc, argv, "i:t:p:r:a:c:l:x:hG:I:n:R:S:D:k:Fb:PO")) != -1) {
 		switch (opt_char) {
@@ -247,7 +246,7 @@ int parse_arguments(int argc, char* argv[], ConsensusOptions& t) {
 				} else if (optarg[0] == '1') {
 					t.input_type = INPUT_TYPE_M4;
 				} else {
-					fprintf(stderr, "invalid argument to option '%c': %s\n", input_type_n, optarg);
+					std::cerr << "invalid argument to option '" << input_type_n << "': " << optarg << "\n";
 					return 1;
 				}
 				break;
@@ -306,13 +305,11 @@ int parse_arguments(int argc, char* argv[], ConsensusOptions& t) {
 				t.reorder_reads = 1;
 				break;
 			case '?':
-				err_char = (char)optopt;
-				fprintf(stderr, "unrecognised option '%c'\n", err_char);
+				std::cerr << "unrecognised option '" << char(optopt) << "'\n";
 				return 1;
 				break;
 			case ':':
-				err_char = (char)optopt;
-				fprintf(stderr, "argument to option '%c' is missing.\n", err_char);
+				std::cerr << "argument to option '" << char(optopt) << "' is missing.\n";
 				return 1;
 				break;
 		}

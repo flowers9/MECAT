@@ -13,8 +13,9 @@ struct ExtensionCandidate
 	int score;
 };
 
-// candidates only use a few of these values, so make a smaller structure for them
+// candidates only use a few of these values, so make a smaller structure for them;
 // sid and qid are used a lot, and we sort on score, so stash qdir inside msb of qext
+
 struct ExtensionCandidateCompressed {
 	uint32_t sid, qid, sext, qext_, score;
 	int qdir() const {

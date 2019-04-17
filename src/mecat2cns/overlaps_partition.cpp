@@ -85,17 +85,15 @@ static void get_repeat_reads(const char* const m4_file_name, const double min_co
 }
 #endif
 
-void generate_partition_index_file_name(const char* const m4_file_name, std::string& ret) {
-	ret = m4_file_name;
+void generate_partition_index_file_name(const std::string& input_file_name, std::string& ret) {
+	ret = input_file_name;
 	ret += ".partition_files";
 }
 
-void generate_partition_file_name(const char* const m4_file_name, const idx_t part, std::string& ret) {
-	ret = m4_file_name;
-	ret += ".part";
+void generate_partition_file_name(const std::string& input_file_name, const idx_t part, std::string& ret) {
 	std::ostringstream os;
 	os << part;
-	ret += os.str();
+	ret = input_file_name + ".part" + os.str();
 }
 
 void partition_candidates(const std::string& input, const std::string& pac_prefix, const size_t batch_size, const int num_files, const idx_t num_reads) {
@@ -118,7 +116,7 @@ void partition_candidates(const std::string& input, const std::string& pac_prefi
 	off_t input_pos;
 	int is_restart(prw.restart(input, generate_partition_file_name, "partition.done", i, input_pos));
 	std::string idx_file_name;
-	generate_partition_index_file_name(input.c_str(), idx_file_name);
+	generate_partition_index_file_name(input, idx_file_name);
 	std::ofstream idx_file;
 	open_fstream(idx_file, idx_file_name.c_str(), std::ios::out);
 	ExtensionCandidate ec;
@@ -169,7 +167,7 @@ void partition_candidates(const std::string& input, const std::string& pac_prefi
 			}
 		}
 		for (int k(0); k < nf; ++k) {
-			fprintf(stderr, "%s contains %ld overlaps\n", prw.file_names[k].c_str(), prw.counts[k]);
+			std::cerr << prw.file_names[k] << " contains " << prw.counts[k] << " overlaps\n";
 			if (prw.counts[k] != 0) {
 				idx_file << prw.file_names[k] << "\n";
 			}
@@ -223,7 +221,7 @@ void partition_candidates_reorder(const std::string& input, const size_t batch_s
 	std::vector<int> read_to_file(num_reads, -1);
 	allocate_reads_to_files(num_batches, align_counts, read_to_file);
 	std::string idx_file_name;
-	generate_partition_index_file_name(input.c_str(), idx_file_name);
+	generate_partition_index_file_name(input, idx_file_name);
 	std::ofstream idx_file;
 	open_fstream(idx_file, idx_file_name.c_str(), std::ios::out);
 	ExtensionCandidate ec;
@@ -271,7 +269,7 @@ void partition_candidates_reorder(const std::string& input, const size_t batch_s
 		}
 		const int nf(efid - sfid);
 		for (int k(0); k < nf; ++k) {
-			fprintf(stderr, "%s contains %ld overlaps\n", prw.file_names[k].c_str(), prw.counts[k]);
+			std::cerr << prw.file_names[k] << " contains " << prw.counts[k] << " overlaps\n";
 			if (prw.counts[k] != 0) {
 				idx_file << prw.file_names[k] << "\n";
 			}
@@ -329,7 +327,7 @@ void partition_m4records(const char* const m4_file_name, const double min_cov_ra
 			}
 		}
 		for (int k(0); k < nf; ++k) {
-			fprintf(stderr, "%s contains %ld overlaps\n", prw.file_names[k].c_str(), prw.counts[k]);
+			std::cerr << prw.file_names[k] << " contains " << prw.counts[k] << " overlaps\n";
 			if (prw.counts[k] != 0) {
 				idx_file << prw.file_names[k] << "\n";
 			}

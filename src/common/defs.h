@@ -4,7 +4,7 @@
 #include <cassert>
 #include <cstdlib>
 #include <stdint.h>
-
+#include <iomanip>	// fixed, setprecision()
 #include <iostream>
 #include <sstream>
 
@@ -163,32 +163,33 @@ do { \
 
 #include <sys/time.h>
 
-struct Timer
-{
-    struct timeval start;
-    struct timeval end;
-
-    void go() { gettimeofday(&start, NULL); }
-    void stop() { gettimeofday(&end, NULL); }
-    double elapsed() { return end.tv_sec - start.tv_sec + 1.0 * (end.tv_usec - start.tv_usec) / 1000000; }
+struct Timer {
+	struct timeval start;
+	struct timeval end;
+	void go() {
+		gettimeofday(&start, NULL);
+	}
+	void stop() {
+		gettimeofday(&end, NULL);
+	}
+	double elapsed() const {
+		return end.tv_sec - start.tv_sec + double(end.tv_usec - start.tv_usec) / 1000000;
+	}
 };
 
-struct DynamicTimer
-{
-	DynamicTimer(const char* func) : m_func(func) 
-	{ 
-		if (m_func) fprintf(stderr, "[%s] begins.\n", m_func);
-		timer.go(); 
+class DynamicTimer {
+    public:
+	explicit DynamicTimer(const std::string& func) : m_func(func) { 
+		std::cerr << "[" << m_func << "] begins.\n";
+		m_timer.go(); 
 	}
-	~DynamicTimer() 
-	{
-		timer.stop();
-		fprintf(stderr, "[%s] takes %.2f secs.\n", m_func, timer.elapsed());
+	~DynamicTimer() {
+		m_timer.stop();
+		std::cerr << "[" << m_func << "] takes " << std::fixed << std::setprecision(2) << m_timer.elapsed() << " secs.\n";
 	}
-	
-private:
-	const char* m_func;
-	Timer timer;
+    private:
+	const std::string& m_func;
+	Timer m_timer;
 };
 
 const u1_t* get_dna_encode_table();
@@ -200,7 +201,7 @@ const u1_t* get_dna_complement_table();
 #define FWD 0
 #define REV 1
 #define REVERSE_STRAND(s) (1-(s))
-#define MAX_SEQ_SIZE 500000
+#define MAX_SEQ_SIZE 5000000
 #define MAX_INVALID_END_SIZE 200
 #define MIN_EXTEND_SIZE 500
 #define MIN_OVERLAP_SIZE 1000

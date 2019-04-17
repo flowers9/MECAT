@@ -7,9 +7,9 @@
 
 #include "../common/alignment.h"
 
-void generate_partition_index_file_name(const char* m4_file_name, std::string& ret);
+void generate_partition_index_file_name(const std::string& input_file_name, std::string& ret);
 
-void generate_partition_file_name(const char* m4_file_name, const idx_t part, std::string& ret);
+void generate_partition_file_name(const std::string& input_file_name, const idx_t part, std::string& ret);
 
 void partition_m4records(const char* m4_file_name, double min_cov_ratio, size_t batch_size, int min_read_size, int num_files);
 

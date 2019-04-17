@@ -13,7 +13,7 @@
 
 template <class T> class PartitionResultsWriter {
     public:
-	typedef void (*file_name_generator)(const char* prefix, idx_t id, std::string& name);
+	typedef void (*file_name_generator)(const std::string& prefix, idx_t id, std::string& name);
     public:
 	const int kNumFiles;	// effective open file limit
 	int kStoreSize;
@@ -170,7 +170,7 @@ template <class T> class PartitionResultsWriter {
 		counts.assign(num_open_files, 0);
 		files = new std::ofstream[num_open_files];
 		for (int i(0); i < num_open_files; ++i) {
-			fng(prefix.c_str(), i + batch_start_, file_names[i]);
+			fng(prefix, i + batch_start_, file_names[i]);
 			const std::string tmp_file(file_names[i] + ".tmp");
 			if (is_restart) {
 				if (access(file_names[i].c_str(), F_OK) == 0) {
