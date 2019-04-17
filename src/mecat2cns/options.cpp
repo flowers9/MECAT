@@ -29,7 +29,7 @@ static int default_tech = TECH_PACBIO;
 static int num_partition_files = 0;
 static int full_reads = 0;
 static idx_t read_buffer_size = 0;
-static idx_t batch_size = 8589934592;		// 8 GB
+static idx_t batch_size = idx_t(1) << 33;	// 8 GB
 
 static const char input_type_n    = 'i';
 static const char num_threads_n   = 't';
@@ -48,6 +48,25 @@ static const char reads_to_correct_n = 'R';
 static const char grid_start_delay_n = 'D';
 static const char full_reads_n    = 'F';
 static const char read_buffer_size_n = 'b';
+
+// convert number with potential suffix (k, m, g)
+static idx_t convert_integer(const std::string& s) {
+	std::istringstream x(s);
+	idx_t value;
+	x >> value;
+	const size_t i(s.find_first_not_of("0123456789"));
+	if (i != std::string::npos) {
+		switch (s[i]) {
+		    case 'g':
+			value *= 1024;
+		    case 'm':
+			value *= 1024;
+		    case 'k':
+			value *= 1024;
+		}
+	}
+	return value;
+}
 
 void
 print_pacbio_default_options()
@@ -237,22 +256,22 @@ int parse_arguments(int argc, char* argv[], ConsensusOptions& t) {
 				}
 				break;
 			case num_threads_n:
-				t.num_threads = atoi(optarg);
+				t.num_threads = convert_integer(optarg);
 				break;
 			case batch_size_n:
-				t.batch_size = atoll(optarg);
+				t.batch_size = convert_integer(optarg);
 				break;
 			case mapping_ratio_n:
 				t.min_mapping_ratio = atof(optarg);
 				break;
 			case align_size_n:
-				t.min_align_size = atoi(optarg);
+				t.min_align_size = convert_integer(optarg);
 				break;
 			case cov_n:
-				t.min_cov = atoi(optarg);
+				t.min_cov = convert_integer(optarg);
 				break;
 			case min_size_n:
-				t.min_size = atoll(optarg);
+				t.min_size = convert_integer(optarg);
 				break;
 			case usage_n:
 				t.print_usage_info = true;
@@ -264,24 +283,24 @@ int parse_arguments(int argc, char* argv[], ConsensusOptions& t) {
 				t.grid_options_split = optarg;
 				break;
 			case job_index_n:
-				t.job_index = atoi(optarg);
+				t.job_index = convert_integer(optarg);
 				break;
 			case reads_to_correct_n:
-				t.reads_to_correct = atoi(optarg);
+				t.reads_to_correct = convert_integer(optarg);
 				break;
 			case grid_start_delay_n:
-				t.grid_start_delay = atoi(optarg);
+				t.grid_start_delay = convert_integer(optarg);
 				break;
 			case tech_n:
 				break;
 			case num_partition_files_n:
-				t.num_partition_files = atoi(optarg);
+				t.num_partition_files = convert_integer(optarg);
 				break;
 			case full_reads_n:
 				t.full_reads = 1;
 				break;
 			case read_buffer_size_n:
-				t.read_buffer_size = atoll(optarg);
+				t.read_buffer_size = convert_integer(optarg);
 				break;
 			case '?':
 				std::cerr << "unrecognised option '" << char(optopt) << "'\n";
