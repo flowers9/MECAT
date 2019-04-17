@@ -55,21 +55,23 @@ struct CmpExtensionCandidateCompressedBySid {
 };
 
 // do full ordering, but using new rid instead of old
-class OrderCmp {
+class NewOrderCmp {
     public:
-	explicit OrderCmp(const std::vector<idx_t>& new_order, const idx_t num_reads) : old_rid_to_new_(num_reads, std::numeric_limits<idx_t>::max()) {
+	// sort reads not used (no new_order entry) at end
+	explicit NewOrderCmp(const std::vector<idx_t>& new_order, const idx_t num_reads) : old_rid_to_new_(num_reads, std::numeric_limits<idx_t>::max()) {
 		for (size_t i(0); i != new_order.size(); ++i) {
 			old_rid_to_new_[new_order[i]] = i;
 		}
 	}
-	~OrderCmp() { }
+	~NewOrderCmp() { }
+	// same as CmpExtensionCandidateCompressedBySidAndScore, but with new order
 	bool operator()(const ExtensionCandidateCompressed& a, const ExtensionCandidateCompressed& b) {
 		if (a.sid != b.sid) {			// primary sort
 							// for splitting up in allocate_ecs()
 			return old_rid_to_new_[a.sid] < old_rid_to_new_[b.sid];
 		} else if (a.score != b.score) {	// secondary sort
 			return b.score < a.score;       // process best ones first
-		} else if (a.qid != b.qid) {		// group ties by id
+		} else if (a.qid != b.qid) {		// group ties by qid
 			return a.qid < b.qid;		// (doesn't matter if new or old)
 		} else if (a.qext() != b.qext()) {
 			return a.qext() < b.qext();
@@ -99,17 +101,15 @@ static void reorder_candidates(ExtensionCandidateCompressed* const ec_list, idx_
 	// allow us to easily access a given sid's aligns
 	std::sort(ec_list, ec_list + nec, CmpExtensionCandidateCompressedBySid());
 	idx_t total_ec(0);
+	// count will be zero for any read id beyond reads_to_correct
 	std::vector<EC_Index> index(reads_to_correct);
 	// index existing list by sid
 	for (idx_t i(0); i != nec;) {
+		// we are guaranteed sid is < reads_to_correct by partitioning
 		const idx_t sid(ec_list[i].sid);
-		if (sid >= reads_to_correct) {
-			break;
-		}
 		const idx_t start(i);
 		for (++i; i != nec && ec_list[i].sid == sid; ++i) { }
 		// make sure we have enough coverage
-		// (don't need to check size, that happened during partition)
 		const idx_t count(i - start);
 		if (count >= min_cov) {
 			index[sid] = EC_Index(start, count);
@@ -119,7 +119,7 @@ static void reorder_candidates(ExtensionCandidateCompressed* const ec_list, idx_
 	// generate the new read order
 	std::vector<char> used(num_reads, 0);
 	std::vector<idx_t> new_order;	// [new_sid] = old_sid
-	new_order.reserve(num_reads);
+	new_order.reserve(num_reads);	// possible overestimate, but whatever
 	idx_t next_unused(0);
 	size_t next_search(0);
 	for (;;) {
@@ -133,17 +133,16 @@ static void reorder_candidates(ExtensionCandidateCompressed* const ec_list, idx_
 		// add all reads aligned to, and aligned to those, and so on
 		for (; next_search != new_order.size(); ++next_search) {
 			const idx_t sid(new_order[next_search]);
+			// make sure read has index entry
 			if (sid < reads_to_correct) {
 				const EC_Index& a(index[sid]);
-				if (a.count) {
-					idx_t i(a.offset);
-					const idx_t end_i(i + a.count);
-					for (; i != end_i; ++i) {
-						const idx_t qid(ec_list[i].qid);
-						if (!used[qid]) {
-							used[qid] = 1;
-							new_order.push_back(qid);
-						}
+				idx_t i(a.offset);
+				const idx_t end_i(i + a.count);
+				for (; i != end_i; ++i) {
+					const idx_t qid(ec_list[i].qid);
+					if (!used[qid]) {
+						used[qid] = 1;
+						new_order.push_back(qid);
 					}
 				}
 			}
@@ -151,8 +150,8 @@ static void reorder_candidates(ExtensionCandidateCompressed* const ec_list, idx_
 	}
 	// re-sort ec_list with new order (note that coverage-excluded
 	// ec's will sort last, so we also change nec to exclude them)
-	OrderCmp new_rid_order(new_order, num_reads);
-	std::sort(ec_list, ec_list + nec, new_rid_order);
+	NewOrderCmp new_rid_order_cmp(new_order, num_reads);
+	std::sort(ec_list, ec_list + nec, new_rid_order_cmp);
 	nec = total_ec;
 }
 

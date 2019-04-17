@@ -127,11 +127,18 @@ struct CmpExtensionCandidateBySidAndScore {
 			return a.qext < b.qext;
 		} else if (a.sext != b.sext) {		// tertiary sort
 			return a.sext < b.sext;		// make sorting consistent
+		} else if (a.soff != b.soff) {
+			return a.soff < b.soff;
+		} else if (a.qoff != b.qoff) {
+			return a.qoff < b.qoff;
+		} else if (a.send != b.send) {
+			return a.send < b.send;
+		} else if (a.qend != b.qend) {
+			return a.qend < b.qend;
 		} else {
 			return a.qdir < b.qdir;
 		}
 		// sdir, qsize, ssize are all the same by this point
-		// qoff, soff, qend, send are all zero
 	}
 };
 
