@@ -237,7 +237,7 @@ static void consensus_worker(const std::vector<CnsTableItem>& cns_table, std::ve
 			// find end of high coverage area
 			for (++i; i < end_i && cns_table[i].mat_cnt + cns_table[i].ins_cnt >= min_cov; ++i) { }
 			if (i - start >= min_size_95) {
-				meap_consensus_one_segment(cns_table + start, i - start, id_list, start, cns_vec, aux_qstr, aux_tstr, cns_seq, min_cov);
+				meap_consensus_one_segment(cns_table, i - start, id_list, start, cns_vec, aux_qstr, aux_tstr, cns_seq, min_cov);
 				if (cns_seq.size() >= static_cast<size_t>(min_size)) {
 					output_cns_result(cns_results, cns_result, start, i, cns_seq);
 				}
@@ -285,7 +285,7 @@ static void consensus_worker_one_read(const std::vector<CnsTableItem>& cns_table
 			// find end of high coverage area
 			for (++i; i < end_i && cns_table[i].mat_cnt + cns_table[i].ins_cnt >= min_cov; ++i) { }
 			if (i - start > min_size_95) {
-				meap_consensus_one_segment(cns_table + start, i - start, id_list, start, cns_vec, aux_qstr, aux_tstr, cns_seq, min_cov);
+				meap_consensus_one_segment(cns_table, i - start, id_list, start, cns_vec, aux_qstr, aux_tstr, cns_seq, min_cov);
 				if (cns_seq.size() >= static_cast<size_t>(min_size)) {
 					// add corrected sequence
 					cns_result.seq += cns_seq;
@@ -322,7 +322,7 @@ void consensus_one_read_m4_pacbio(ConsensusThreadData& ctd, ConsensusPerThreadDa
 	const int min_align_size(ctd.rco.min_align_size);
 	const int max_added(60);
 	std::vector<CnsTableItem>& cns_table(pctd.cns_table);
-	cns_table.assign(read_size);	// reset table
+	cns_table.assign(read_size, CnsTableItem());	// reset table
 	cns_vec.clear();
 	const idx_t L(sid);
 	const idx_t R(eid - sid <= max_added ? eid : L + max_added);
@@ -381,7 +381,7 @@ consensus_one_read_m4_nanopore(ConsensusThreadData& ctd, ConsensusPerThreadData 
 	}
 
 	std::vector<CnsTableItem>& cns_table = pctd.cns_table;
-	cns_table.assign(read_size);	// reset table
+	cns_table.assign(read_size, CnsTableItem());	// reset table
 	cns_vec.clear();
 	for (idx_t i = L; i < R; ++i)
 	{
@@ -451,7 +451,7 @@ void consensus_one_read_can_pacbio(ConsensusThreadData& ctd, ConsensusPerThreadD
 	const int max_added(60);
 	eid = std::min(eid, sid + 200);		// max of 200 extents
 	std::vector<CnsTableItem>& cns_table(pctd.cns_table);
-	cns_table.assign(ssize);		// reset table
+	cns_table.assign(ssize, CnsTableItem());		// reset table
 	cns_vec.clear();
 	std::set<idx_t> used_ids;
 	std::vector<uint1>& id_list(pctd.id_list);		// used to be called cov_stats
@@ -506,7 +506,7 @@ void consensus_one_read_can_nanopore(ConsensusThreadData& ctd, ConsensusPerThrea
 	int num_ext(0);
 	const int max_ext(200);
 	std::vector<CnsTableItem>& cns_table(pctd.cns_table);
-	cns_table.assign(ssize);		// reset table
+	cns_table.assign(ssize, CnsTableItem());		// reset table
 	cns_vec.clear();
 	std::set<int> used_ids;
 	std::vector<uint1>& id_list(pctd.id_list);	// used to be called cov_stats
