@@ -259,37 +259,37 @@ class M5Record {
 	idx_t& m5qid() {
 		return qid;
 	}
-	const idx_t& m5qid() const {
+	const idx_t m5qid() const {
 		return qid;
 	}
 	idx_t& m5qsize() {
 		return qsize;
 	}
-	const idx_t& m5qsize() const {
+	const idx_t m5qsize() const {
 		return qsize;
 	}
 	idx_t& m5qoff() {
 		return qstart;
 	}
-	const idx_t& m5qoff() const {
+	const idx_t m5qoff() const {
 		return qstart;
 	}
 	idx_t& m5qend() {
 		return qend;
 	}
-	const idx_t& m5qend() const {
+	const idx_t m5qend() const {
 		return qend;
 	}
 	int& m5qdir() {
 		return qdir;
 	}
-	const int& m5qdir() const {
+	const int m5qdir() const {
 		return qdir;
 	}
 	idx_t& m5sid() {
 		return sid;
 	}
-	const idx_t& m5sid() const {
+	const idx_t m5sid() const {
 		return sid;
 	}
 	idx_t& m5ssize() {
@@ -307,49 +307,49 @@ class M5Record {
 	idx_t& m5send() {
 		return send;
 	}
-	const idx_t& m5send() const {
+	const idx_t m5send() const {
 		return send;
 	}
 	int& m5sdir() {
 		return sdir;
 	}
-	const int& m5sdir() const {
+	const int m5sdir() const {
 		return sdir;
 	}
 	int& m5score() {
 		return score;
 	}
-	const int& m5score() const {
+	const int m5score() const {
 		return score;
 	}
 	int& m5mat() {
 		return mat;
 	}
-	const int& m5mat() const {
+	const int m5mat() const {
 		return mat;
 	}
 	int& m5mis() {
 		return mis;
 	}
-	const int& m5mis() const {
+	const int m5mis() const {
 		return mis;
 	}
 	int& m5ins() {
 		return ins;
 	}
-	const int& m5ins() const {
+	const int m5ins() const {
 		return ins;
 	}
 	int& m5dels() {
 		return dels;
 	}
-	const int& m5dels() const {
+	const int m5dels() const {
 		return dels;
 	}
 	int& m5mapq() {
 		return mapq;
 	}
-	const int& m5mapq() const {
+	const int m5mapq() const {
 		return mapq;
 	}
 	char*& m5qaln() {
@@ -373,19 +373,19 @@ class M5Record {
 	double& m5ident() {
 		return ident;
 	}
-	const double& m5ident() const {
+	const double m5ident() const {
 		return ident;
 	}
 	idx_t& m5qext() {
 		return qext;
 	}
-	const idx_t& m5qext() const {
+	const idx_t m5qext() const {
 		return qext;
 	}
 	idx_t& m5sext() {
 		return sext;
 	}
-	const idx_t& m5sext() const {
+	const idx_t m5sext() const {
 		return sext;
 	}
 };

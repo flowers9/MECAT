@@ -168,10 +168,9 @@ class ConsensusPerThreadData {
 	// this is ExtensionCandidate for m4 runs, ExtensionCandidateCompressed
 	// for candidate runs (to reduce memory usage)
 	void* candidates;
-	ns_banded_sw::DiffRunningData* drd_s;
-	ns_banded_sw::DiffRunningData* drd_l;
+	ns_banded_sw::DiffRunningData drd;
 	CnsTableItem cns_table[MAX_SEQ_SIZE];
-	uint1 id_list[MAX_SEQ_SIZE];
+	std::vector<uint1> id_list;
 	M5Record m5;
 	CnsAlns cns_alns;
 	std::vector<CnsResult> cns_results;
@@ -180,18 +179,10 @@ class ConsensusPerThreadData {
 	std::string qaln;
 	std::string saln;
     public:
-	ConsensusPerThreadData() : drd_s(new ns_banded_sw::DiffRunningData(ns_banded_sw::get_sw_parameters_small())), drd_l(new ns_banded_sw::DiffRunningData(ns_banded_sw::get_sw_parameters_large())), m5(MAX_SEQ_SIZE) {
+	ConsensusPerThreadData() : drd(ns_banded_sw::DiffRunningData(ns_banded_sw::get_sw_parameters_small())), m5(MAX_SEQ_SIZE) {
 		cns_results.reserve(MAX_CNS_RESULTS);
-		// MAX_SEQ_SIZE is very large now, so let's not pre-allocate
-		//query.reserve(MAX_SEQ_SIZE);
-		//target.reserve(MAX_SEQ_SIZE);
-		//qaln.reserve(MAX_SEQ_SIZE);
-		//saln.reserve(MAX_SEQ_SIZE);
 	}
-	~ConsensusPerThreadData() {
-		delete drd_s;
-		delete drd_l;
-	}
+	~ConsensusPerThreadData() { }
 };
 
 class ConsensusThreadData {
@@ -202,7 +193,7 @@ class ConsensusThreadData {
 	pthread_mutex_t out_lock;
 	idx_t ec_offset;
 	// this doesn't work as a vector - all the pointers end up pointing
-	// to the same values, and eventually it seg faults (probably a
+	// to the same values, and eventually it seg faults (possibly a
 	// compiler optimization bug)
 	ConsensusPerThreadData* data;
     public:

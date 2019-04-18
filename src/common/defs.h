@@ -88,6 +88,7 @@ do { \
 #define safe_malloc(arr, type, count) \
 do { \
     size_t __sm__sz__ = sizeof(type) * (count); \
+std::cerr << __func__ << ": safe_malloc: allocating " << __sm__sz__ << " bytes, " << count << " of size " << sizeof(type) << "\n"; \
     (arr) = (type *)malloc(__sm__sz__); \
     if (!(arr)) ERROR("malloc fail: %lu * %lu = %lu", sizeof(type), size_t(count), __sm__sz__); \
 } while(0)
@@ -95,6 +96,7 @@ do { \
 #define safe_calloc(arr, type, count) \
 do { \
     size_t __sc__sz__ = sizeof(type) * (count); \
+std::cerr << __func__ << " safe_calloc: allocating " << __sc__sz__ << " bytes, " << count << " of size " << sizeof(type) << "\n"; \
     (arr) = (type *)calloc(1, __sc__sz__); \
     if (!(arr)) ERROR("calloc fail: %lu * %lu = %lu", sizeof(type), size_t(count), __sc__sz__); \
 } while(0)
@@ -102,6 +104,7 @@ do { \
 #define safe_realloc(arr, type, count) \
 do { \
 	size_t __sr__size__ = sizeof(type) * count; \
+std::cerr << __func__ << " safe_realloc: allocating " << __sr__size__ << " bytes, " << count << " of size " << sizeof(type) << "\n"; \
 	arr = (type *)realloc(arr, __sr__size__); \
 	if (!arr) \
 	{ \
@@ -201,7 +204,7 @@ const u1_t* get_dna_complement_table();
 #define FWD 0
 #define REV 1
 #define REVERSE_STRAND(s) (1-(s))
-#define MAX_SEQ_SIZE 5000000
+#define MAX_SEQ_SIZE 500000
 #define MAX_INVALID_END_SIZE 200
 #define MIN_EXTEND_SIZE 500
 #define MIN_OVERLAP_SIZE 1000
