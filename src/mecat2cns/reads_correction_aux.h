@@ -19,83 +19,80 @@ struct CnsTableItem {
 
 #define MAX_CNS_OVLPS 100
 
-struct MappingRange
-{
+class MappingRange {
+    public:
 	int start, end;
-	
-	MappingRange(int s, int e) : start(s), end(e) {}
+	explicit MappingRange() : start(0), end(0) { }
+	explicit MappingRange(const int s, const int e) : start(s), end(e) { }
+	~MappingRange() { }
 };
 
-struct CnsAln
-{
-	int soff, send, aln_idx, aln_size;
-	char qaln[MAX_SEQ_SIZE];
-	char saln[MAX_SEQ_SIZE];
-	
-	bool retrieve_aln_subseqs(int sb, int se, std::string& qstr, std::string& tstr, int& sb_out)
-	{
-		if (se <= soff || sb >= send || aln_idx >= aln_size - 1) return false;
-		sb_out = std::max(soff, sb);
+class CnsAln : public MappingRange {
+    public:
+	explicit CnsAln() : aln_idx(0) { }
+	explicit CnsAln(const int i, const int j, const int k, const std::string& q, const std::string& s) : MappingRange(i, j), aln_idx(k), qaln(s), saln(q) { }
+	~CnsAln() { }
+	// don't know why this skips the first basepair
+	int retrieve_aln_subseqs(const int sb, const int se, std::string& qstr, std::string& tstr, int& sb_out) {
+		const int aln_size(static_cast<int>(saln.size()) - 1);
+		if (se <= start || sb >= end || aln_idx >= aln_size) {
+			return 0;
+		}
+		sb_out = std::max(start, sb);
 		qstr.clear();
 		tstr.clear();
-		while(soff < sb && aln_idx < aln_size - 1)
-		{
+		while (start < sb && aln_idx < aln_size) {
 			++aln_idx;
-			if (saln[aln_idx] != GAP) ++soff;
+			if (saln[aln_idx] != GAP) {
+				++start;
+			}
 		}
 		qstr += qaln[aln_idx];
 		tstr += saln[aln_idx];
-		while (soff < se && aln_idx < aln_size - 1)
-		{
+		while (start < se && aln_idx < aln_size) {
 			++aln_idx;
-			if (saln[aln_idx] != GAP) ++soff;
+			if (saln[aln_idx] != GAP) {
+				++start;
+			}
 			qstr += qaln[aln_idx];
 			tstr += saln[aln_idx];
 		}
-		return true;
+		return 1;
 	}
+    private:
+	int aln_idx;
+	std::string qaln, saln;
 };
 
 class CnsAlns {
     public:
-	CnsAlns() : num_alns_(0) {
-		safe_malloc(cns_alns_, CnsAln, MAX_CNS_OVLPS);
-	}
-	~CnsAlns() {
-		safe_free(cns_alns_);
-	}
+	CnsAlns() { }
+	~CnsAlns() { }
 	void clear() {
-		num_alns_ = 0;
+		cns_alns_.clear();
 	}
-	int num_alns() const {
-		return num_alns_;
+	size_t num_alns() const {
+		return cns_alns_.size();
 	}
-	CnsAln* begin() {
-		return cns_alns_;
+	std::vector<CnsAln>::iterator begin() {
+		return cns_alns_.begin();
 	}
-	CnsAln* end() {
-		return cns_alns_ + num_alns_;
+	std::vector<CnsAln>::const_iterator end() const {
+		return cns_alns_.end();
 	}
 	void add_aln(const int soff, const int send, const std::string& qstr, const std::string& tstr) {
 		r_assert(qstr.size() == tstr.size());
-		CnsAln& a(cns_alns_[num_alns_++]);
-		a.soff = soff;
-		a.send = send;
-		a.aln_idx = 0;
-		a.aln_size = qstr.size();
-		memcpy(a.qaln, qstr.c_str(), a.aln_size + 1);
-		memcpy(a.saln, tstr.c_str(), a.aln_size + 1);
+		cns_alns_.push_back(CnsAln(soff, send, 0, qstr, tstr));
 	}
 	void get_mapping_ranges(std::vector<MappingRange>& ranges) const {
 		ranges.clear();
-		ranges.reserve(num_alns_);
-		for (int i(0); i < num_alns_; ++i) {
-			ranges.push_back(MappingRange(cns_alns_[i].soff, cns_alns_[i].send));
+		ranges.reserve(cns_alns_.size());
+		for (size_t i(0); i < cns_alns_.size(); ++i) {
+			ranges.push_back(cns_alns_[i]);
 		}
 	}
     private:
-	int num_alns_;
-	CnsAln* cns_alns_;
+	std::vector<CnsAln> cns_alns_;
 };
 
 // 1k seems to work a bit better than 10k - perhaps less time waiting for
@@ -167,7 +164,8 @@ class ConsensusPerThreadData {
 	std::string saln;
     public:
 	ConsensusPerThreadData() : drd(ns_banded_sw::DiffRunningData(ns_banded_sw::get_sw_parameters_small())), m5(MAX_SEQ_SIZE) {
-		// we'll definitely be seeing this much use, so might as well preallocate
+		// we'll definitely be seeing at least this much use,
+		// so might as well preallocate
 		cns_results.reserve(MAX_CNS_RESULTS);
 	}
 	~ConsensusPerThreadData() { }

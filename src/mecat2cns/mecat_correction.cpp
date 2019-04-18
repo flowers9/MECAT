@@ -69,7 +69,7 @@ static void meap_add_one_aln(const std::string& qaln, const std::string& saln, i
 static void meap_cns_one_indel(const int sb, const int se, CnsAlns& cns_vec, const int min_cov, std::string& aux_qstr, std::string& aux_tstr, std::string& cns) {
 	AlnGraphBoost ag(se - sb + 1);
 	int sb_out;
-	for (CnsAln* a(cns_vec.begin()); a != cns_vec.end(); ++a) {
+	for (std::vector<CnsAln>::iterator a(cns_vec.begin()); a != cns_vec.end(); ++a) {
 		if (a->retrieve_aln_subseqs(sb, se, aux_qstr, aux_tstr, sb_out)) {
 			ag.addAln(aux_qstr, aux_tstr, sb_out - sb + 1);
 		}
