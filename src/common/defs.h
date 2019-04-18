@@ -179,7 +179,7 @@ struct Timer {
 
 class DynamicTimer {
     public:
-	explicit DynamicTimer(const std::string& func) : m_func(func) { 
+	explicit DynamicTimer(const char* const func) : m_func(func) { 
 		std::cerr << "[" << m_func << "] begins.\n";
 		m_timer.go(); 
 	}
@@ -188,7 +188,7 @@ class DynamicTimer {
 		std::cerr << "[" << m_func << "] takes " << std::fixed << std::setprecision(2) << m_timer.elapsed() << " secs.\n";
 	}
     private:
-	const std::string& m_func;
+	const std::string m_func;
 	Timer m_timer;
 };
 

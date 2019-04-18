@@ -118,7 +118,7 @@ class CnsAlns {
 struct CmpExtensionCandidateBySidAndScore {
 	bool operator()(const ExtensionCandidate& a, const ExtensionCandidate& b) {
 		if (a.sid != b.sid) {			// primary sort
-			return a.sid < b.sid;		// for splitting up in allocate_ecs()
+			return a.sid < b.sid;
 		} else if (a.score != b.score) {	// secondary sort
 			return b.score < a.score;	// process best ones first
 		} else if (a.qid != b.qid) {
@@ -182,10 +182,11 @@ class ConsensusPerThreadData {
     public:
 	ConsensusPerThreadData() : drd_s(new ns_banded_sw::DiffRunningData(ns_banded_sw::get_sw_parameters_small())), drd_l(new ns_banded_sw::DiffRunningData(ns_banded_sw::get_sw_parameters_large())), m5(MAX_SEQ_SIZE) {
 		cns_results.reserve(MAX_CNS_RESULTS);
-		query.reserve(MAX_SEQ_SIZE);
-		target.reserve(MAX_SEQ_SIZE);
-		qaln.reserve(MAX_SEQ_SIZE);
-		saln.reserve(MAX_SEQ_SIZE);
+		// MAX_SEQ_SIZE is very large now, so let's not pre-allocate
+		//query.reserve(MAX_SEQ_SIZE);
+		//target.reserve(MAX_SEQ_SIZE);
+		//qaln.reserve(MAX_SEQ_SIZE);
+		//saln.reserve(MAX_SEQ_SIZE);
 	}
 	~ConsensusPerThreadData() {
 		delete drd_s;

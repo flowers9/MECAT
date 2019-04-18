@@ -210,6 +210,7 @@ template <class T> T* load_partition_data(const char* const path, idx_t& num_res
 	in.seekg(0, std::ios::beg);
 	num_results = fs / sizeof(T);
 	T* const arr(new T[num_results]);
+std::cerr << "load_partition_data: allocating for " << num_results << " objects of size " << sizeof(T) << "\n";
 	in.read((char*)arr, fs);	// can't use static_cast<>
 	if (!in) {
 		ERROR("Error reading partition data: %s", path);

@@ -214,21 +214,7 @@ void PackedDB::open_db(const std::string& path, const idx_t size) {
 		}
 		close_fstream(index);
 	}
-}
-
-const char* PackedDB::load_read(const idx_t read_id) {
-	const SeqIndex& si(seq_idx[read_id]);
-	if (!pstream.is_open()) {	// all in memory already
-		return (char*)pac + si.memory_offset / 4;
-	}
-	if (!pstream.seekg(si.file_offset)) {
-		ERROR("Error seeking on fasta db");
-	}
-	const idx_t bytes((si.size + 3) / 4);
-	if (!pstream.read((char*)pac, bytes)) {
-		ERROR("Error reading fasta db");
-	}
-	return (char*)pac;
+std::cerr << "open_db: read count " << read_count << ", index size " << seq_idx.size() << ", max db size " << max_db_size << "\n";
 }
 
 idx_t PackedDB::load_reads(const ExtensionCandidateCompressed* const ec_list, const idx_t nec) {
@@ -278,6 +264,7 @@ idx_t PackedDB::load_reads(const ExtensionCandidateCompressed* const ec_list, co
 	if (max_db_size == 0) {
 		max_db_size = total_size;
 		safe_calloc(pac, u1_t, max_db_size);
+std::cerr << "load_reads: allocating " << max_db_size << "\n";
 	}
 	// now read in the reads
 	std::set<idx_t>::const_iterator a(read_ids.begin());
@@ -304,49 +291,6 @@ idx_t PackedDB::load_reads(const ExtensionCandidateCompressed* const ec_list, co
 	return i;
 }
 
-void PackedDB::create_index(const std::string& output_prefix, const std::vector<std::pair<idx_t, idx_t> >& index) {
-	const std::string index_name(output_prefix + ".idx");
-	const std::string index_name_tmp(index_name + ".tmp");
-	std::ofstream out;
-	open_fstream(out, index_name_tmp.c_str(), std::ios::out);
-	std::vector<std::pair<idx_t, idx_t> >::const_iterator a(index.begin());
-	const std::vector<std::pair<idx_t, idx_t> >::const_iterator end_a(index.end());
-	for (; a != end_a; ++a) {
-		out << a->first << "\t" << a->second << "\n";
-		if (!out) {
-			ERROR("Error writing to pac index file: %s", index_name_tmp.c_str());
-		}
-	}
-	close_fstream(out);
-	if (rename(index_name_tmp.c_str(), index_name.c_str()) == -1) {
-		ERROR("Error renaming pac index file: %s", index_name_tmp.c_str());
-	}
-}
-
-void PackedDB::read_index(const std::string& output_prefix, std::vector<std::pair<idx_t, idx_t> >& index) {
-	const std::string pac_name(output_prefix + ".pac");
-	std::ifstream in(pac_name.c_str());
-	// pre-allocate index if possible
-	if (in.is_open()) {
-		// get number of reads from end of database
-		if (!in.seekg(-sizeof(size_t), std::ios_base::end)) {
-			ERROR("Could not seek to end of fasta db to get size\n");
-		}
-		size_t read_count;
-		if (!in.read((char*)&read_count, sizeof(size_t))) {
-			ERROR("Could not read fasta db to get size\n");
-		}
-		in.close();
-		index.reserve(read_count);
-	}
-	const std::string index_name(output_prefix + ".idx");
-	open_fstream(in, index_name.c_str(), std::ios::in);
-	idx_t i, j;
-	while (in >> i >> j) {
-		index.push_back(std::make_pair(i, j));
-	}
-}
-
 void PackedDB::read_sizes(const std::string& output_prefix, std::vector<idx_t>& sizes) {
 	const std::string pac_name(output_prefix + ".pac");
 	std::ifstream in(pac_name.c_str());
@@ -362,6 +306,7 @@ void PackedDB::read_sizes(const std::string& output_prefix, std::vector<idx_t>& 
 		}
 		in.close();
 		sizes.reserve(read_count);
+std::cerr << "read_sizes: read_count " << read_count << "\n";
 	}
 	const std::string index_name(output_prefix + ".idx");
 	open_fstream(in, index_name.c_str(), std::ios::in);
@@ -369,4 +314,5 @@ void PackedDB::read_sizes(const std::string& output_prefix, std::vector<idx_t>& 
 	while (in >> i >> j) {
 		sizes.push_back(j);
 	}
+std::cerr << "read_sizes: sizes size " << sizes.size() << "\n";
 }

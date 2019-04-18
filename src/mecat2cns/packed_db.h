@@ -28,18 +28,14 @@ class PackedDB {
 	void load_fasta_db(const char* fasta);
 	// returns number of reads
 	static size_t convert_fasta_to_db(const std::string& fasta, const std::string& output_prefix, idx_t min_size);
-	// create a prospective index file for pac file to be written in random order
-	static void create_index(const std::string& output_prefix, const std::vector<std::pair<idx_t, idx_t> >& index);
-	static void read_index(const std::string& output_prefix, std::vector<std::pair<idx_t, idx_t> >& index);
 	static void read_sizes(const std::string& output_prefix, std::vector<idx_t>& sizes);
 	// opens data file, reads in index file
 	void open_db(const std::string& filename, idx_t memory_footprint);
-	const char* load_read(idx_t read_id);
 	// returns number of candidates that can be processed
 	idx_t load_reads(const ExtensionCandidateCompressed* ec_list, idx_t nec);
 	void GetSequence(const idx_t id, const bool forward, char* const seq, const idx_t size) const {
 		const SeqIndex &si(seq_idx[id]);
-		r_assert(size == si.size);
+		//r_assert(size == si.size);	// mostly obsolete now
 		if (forward) {
 			const idx_t offset(si.memory_offset);
 			for (idx_t i(0); i < si.size; ++i) {

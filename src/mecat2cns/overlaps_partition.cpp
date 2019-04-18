@@ -128,7 +128,7 @@ void partition_candidates(const std::string& input, const std::string& pac_prefi
 		const idx_t efid(std::min(sfid + prw.kNumFiles, num_batches));
 		const int nf(efid - sfid);
 		const idx_t L(sfid * reads_per_batch);
-		const idx_t R(efid < num_batches ? efid * reads_per_batch : num_reads);
+		const idx_t R(std::min(efid * reads_per_batch, num_reads));
 		std::ifstream in;
 		open_fstream(in, input.c_str(), std::ios::in);
 		if (is_restart) {
