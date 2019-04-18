@@ -177,7 +177,7 @@ int  dw(const char* query, const int query_size, const int query_start,
         PathPoint* aln_path, OutputStore* result, SW_Parameters* swp,
 	    double error_rate, const int min_aln_size);
 
-bool GetAlignment(const char* query, int query_start, int query_size, const char* target, int target_start, int target_size, DiffRunningData* drd, M5Record& m5, double error_rate, int min_aln_size);
+bool GetAlignment(const char* query, int query_start, int query_size, const char* target, int target_start, int target_size, DiffRunningData& drd, M5Record& m5, double error_rate, int min_aln_size);
 
 } // end of namespace ns_banded_sw
 

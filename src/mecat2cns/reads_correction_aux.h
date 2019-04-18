@@ -9,25 +9,12 @@
 #include "packed_db.h"
 #include "options.h"
 
-struct CnsTableItem
-{
+struct CnsTableItem {
 	char base;
 	uint1 mat_cnt;
 	uint1 ins_cnt;
 	uint1 del_cnt;
-	
-	CnsTableItem() : base('N'), mat_cnt(0), ins_cnt(0), del_cnt(0) {}
-};
-
-struct CnsTableItemCleaner
-{
-	void operator()(CnsTableItem& item) 
-	{
-		item.base = 'N';
-		item.mat_cnt = 0;
-		item.ins_cnt = 0;
-		item.del_cnt = 0;
-	}
+	CnsTableItem() : base('N'), mat_cnt(0), ins_cnt(0), del_cnt(0) { }
 };
 
 #define MAX_CNS_OVLPS 100
@@ -169,7 +156,7 @@ class ConsensusPerThreadData {
 	// for candidate runs (to reduce memory usage)
 	void* candidates;
 	ns_banded_sw::DiffRunningData drd;
-	CnsTableItem cns_table[MAX_SEQ_SIZE];
+	std::vector<CnsTableItem> cns_table;
 	std::vector<uint1> id_list;
 	M5Record m5;
 	CnsAlns cns_alns;
@@ -180,6 +167,7 @@ class ConsensusPerThreadData {
 	std::string saln;
     public:
 	ConsensusPerThreadData() : drd(ns_banded_sw::DiffRunningData(ns_banded_sw::get_sw_parameters_small())), m5(MAX_SEQ_SIZE) {
+		// we'll definitely be seeing this much use, so might as well preallocate
 		cns_results.reserve(MAX_CNS_RESULTS);
 	}
 	~ConsensusPerThreadData() { }

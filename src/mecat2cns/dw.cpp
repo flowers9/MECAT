@@ -459,8 +459,8 @@ int dw(const char* query, const int query_size, const int query_start, const cha
 	return 1;
 }
 
-bool GetAlignment(const char* const query, const int query_start, const int query_size, const char* const target, const int target_start, const int target_size, DiffRunningData* const drd, M5Record& m5, const double error_rate, const int min_aln_size) {
-	if (!dw(query, query_size, query_start, target, target_size, target_start, drd->DynQ, drd->DynT, drd->align, drd->d_path, drd->aln_path, drd->result, &drd->swp, error_rate, min_aln_size)) {
+bool GetAlignment(const char* const query, const int query_start, const int query_size, const char* const target, const int target_start, const int target_size, DiffRunningData& drd, M5Record& m5, const double error_rate, const int min_aln_size) {
+	if (!dw(query, query_size, query_start, target, target_size, target_start, drd.DynQ, drd.DynT, drd.align, drd.d_path, drd.aln_path, drd.result, &drd.swp, error_rate, min_aln_size)) {
 		return 0;
 	}
 	const int consecutive_match_region_size(4);
@@ -469,9 +469,9 @@ bool GetAlignment(const char* const query, const int query_start, const int quer
 	int trb(0);	// t starting pads
 	int eit(0);	// matching run length
 	int k;
-	for (k = 0; k < drd->result->out_store_size; ++k) {
-		const char qc(drd->result->out_store1[k]);
-		const char tc(drd->result->out_store2[k]);
+	for (k = 0; k < drd.result->out_store_size; ++k) {
+		const char qc(drd.result->out_store1[k]);
+		const char tc(drd.result->out_store2[k]);
 		if (qc != '-') {
 			++qrb;
 		}
@@ -494,9 +494,9 @@ bool GetAlignment(const char* const query, const int query_start, const int quer
 	// trim trailing end of alignment
 	int qre(0);	// q ending pads
 	int tre(0);	// t ending pads
-	for (k = drd->result->out_store_size - 1, eit = 0; start_aln_id < k; --k) {
-		const char qc(drd->result->out_store1[k]);
-		const char tc(drd->result->out_store2[k]);
+	for (k = drd.result->out_store_size - 1, eit = 0; start_aln_id < k; --k) {
+		const char qc(drd.result->out_store1[k]);
+		const char tc(drd.result->out_store2[k]);
 		if (qc != '-') {
 			++qre;
 		}
@@ -514,17 +514,17 @@ bool GetAlignment(const char* const query, const int query_start, const int quer
 	tre -= consecutive_match_region_size;
 	const int end_aln_id(k + consecutive_match_region_size + 1);
 	m5qsize(m5) = query_size;
-	m5qoff(m5) = drd->result->query_start + qrb;
-	m5qend(m5) = drd->result->query_end - qre;
+	m5qoff(m5) = drd.result->query_start + qrb;
+	m5qend(m5) = drd.result->query_end - qre;
 	m5qdir(m5) = FWD;
 	m5ssize(m5) = target_size;
-	m5soff(m5) = drd->result->target_start + trb;
-	m5send(m5) = drd->result->target_end - tre;
+	m5soff(m5) = drd.result->target_start + trb;
+	m5send(m5) = drd.result->target_end - tre;
 	m5sdir(m5) = FWD;
 	const int aln_size(end_aln_id - start_aln_id);
-	memcpy(m5qaln(m5), drd->result->out_store1 + start_aln_id, aln_size);
-	memcpy(m5saln(m5), drd->result->out_store2 + start_aln_id, aln_size);
-	memcpy(m5pat(m5), drd->result->out_match_pattern + start_aln_id, aln_size);
+	memcpy(m5qaln(m5), drd.result->out_store1 + start_aln_id, aln_size);
+	memcpy(m5saln(m5), drd.result->out_store2 + start_aln_id, aln_size);
+	memcpy(m5pat(m5), drd.result->out_match_pattern + start_aln_id, aln_size);
 	m5qaln(m5)[aln_size] = '\0';
 	m5saln(m5)[aln_size] = '\0';
 	m5pat(m5)[aln_size] = '\0';

@@ -2,6 +2,8 @@
 
 #include "MECAT_AlnGraphBoost.H"
 
+#include <limits>	// numeric_limits::max()
+
 using namespace ns_banded_sw;
 
 namespace ns_meap_cns {
@@ -39,10 +41,10 @@ struct CompareOverlapByOverlapSize
 	}
 };
 
-static void meap_add_one_aln(const std::string& qaln, const std::string& saln, idx_t start_soff, CnsTableItem* const cns_table, const char* const org_seq) {
+static void meap_add_one_aln(const std::string& qaln, const std::string& saln, idx_t start_soff, std::vector<CnsTableItem>& cns_table, const char* const org_seq) {
 	r_assert(qaln.size() == saln.size());
 	const idx_t aln_size(qaln.size());
-	for (idx_t i(0); i < aln_size; ) {
+	for (idx_t i(0); i < aln_size;) {
 		const char q(qaln[i]);
 		const char s(saln[i]);
 		if (q == '-' && s == '-') {	// skip
@@ -76,13 +78,13 @@ static void meap_cns_one_indel(const int sb, const int se, CnsAlns& cns_vec, con
 	ag.consensus(min_cov * 0.4, cns);
 }
 
-static void meap_consensus_one_segment(const CnsTableItem* const cns_list, const int cns_list_size, std::vector<uint1>& cns_id_vec, const int start_soff, CnsAlns& cns_vec, std::string& aux_qstr, std::string& aux_tstr, std::string& target, const int min_cov) {
+static void meap_consensus_one_segment(const std::vector<CnsTableItem>& cns_list, const int cns_list_size, std::vector<uint1>& cns_id_vec, const int start_soff, CnsAlns& cns_vec, std::string& aux_qstr, std::string& aux_tstr, std::string& target, const int min_cov) {
 	if (static_cast<int>(cns_id_vec.size()) < cns_list_size) {
 		cns_id_vec.resize(cns_list_size);
 	}
 	// get types of coverage
 	for (int i(0); i < cns_list_size; ++i) {
-		cns_id_vec[i] = identify_one_consensus_item(cns_list[i], min_cov);
+		cns_id_vec[i] = identify_one_consensus_item(cns_list[start_soff + i], min_cov);
 	}
 	std::string cns;
 	target.clear();
@@ -91,7 +93,7 @@ static void meap_consensus_one_segment(const CnsTableItem* const cns_list, const
 	// advance to matching coverage
 	for (; i < cns_list_size && !(cns_id_vec[i] & FMAT); ++i) { }
 	while (i < cns_list_size) {
-		target.push_back(cns_list[i].base);
+		target.push_back(cns_list[start_soff + i].base);
 		const int start(i);
 		// advance to next matching coverage
 		for (++i; i < cns_list_size && !(cns_id_vec[i] & FMAT); ++i) { }
@@ -104,7 +106,7 @@ static void meap_consensus_one_segment(const CnsTableItem* const cns_list, const
 			}
 		}
 		if (need_refinement) {
-			meap_cns_one_indel(start + start_soff, i + start_soff, cns_vec, cns_list[start].mat_cnt + cns_list[start].ins_cnt, aux_qstr, aux_tstr, cns);
+			meap_cns_one_indel(start_soff + start, start_soff + i, cns_vec, cns_list[start_soff + start].mat_cnt + cns_list[start_soff + start].ins_cnt, aux_qstr, aux_tstr, cns);
 			// trim first and last as they have good coverage
 			if (cns.size() > 2) {
 				target.append(cns.data() + 1, cns.size() - 2);
@@ -219,7 +221,7 @@ check_ovlp_mapping_range(const int qb, const int qe, const int qs,
 // look for areas of high coverage of about min_size or more,
 // improve them and stick on the results pile
 
-static void consensus_worker(const CnsTableItem* const cns_table, std::vector<uint1>& id_list, CnsAlns& cns_vec, std::string& aux_qstr, std::string& aux_tstr, const std::vector<MappingRange>& eranges, const int min_cov, const int min_size, const int read_id, std::vector<CnsResult>& cns_results) {
+static void consensus_worker(const std::vector<CnsTableItem>& cns_table, std::vector<uint1>& id_list, CnsAlns& cns_vec, std::string& aux_qstr, std::string& aux_tstr, const std::vector<MappingRange>& eranges, const int min_cov, const int min_size, const int read_id, std::vector<CnsResult>& cns_results) {
 	CnsResult cns_result;
 	cns_result.id = read_id;
 	const idx_t min_size_95(ceil(0.95 * min_size));
@@ -254,7 +256,7 @@ static void decode_and_append_sequence(std::string& s, const char* const seq, id
 // same as consensus_worker, but produces entire read as one entry;
 // uncorrected sections are just copied as is;
 
-static void consensus_worker_one_read(const CnsTableItem* const cns_table, std::vector<uint1>& id_list, CnsAlns& cns_vec, std::string& aux_qstr, std::string& aux_tstr, const std::vector<MappingRange>& eranges, const int min_cov, const int min_size, const int read_id, const std::vector<char>& tstr, std::vector<CnsResult>& cns_results) {
+static void consensus_worker_one_read(const std::vector<CnsTableItem>& cns_table, std::vector<uint1>& id_list, CnsAlns& cns_vec, std::string& aux_qstr, std::string& aux_tstr, const std::vector<MappingRange>& eranges, const int min_cov, const int min_size, const int read_id, const std::vector<char>& tstr, std::vector<CnsResult>& cns_results) {
 	CnsResult cns_result;
 	cns_result.id = read_id;
 	const idx_t min_size_95(std::max<int>(ceil(0.95 * min_size), 1) - 1);
@@ -306,7 +308,7 @@ static void consensus_worker_one_read(const CnsTableItem* const cns_table, std::
 void consensus_one_read_m4_pacbio(ConsensusThreadData& ctd, ConsensusPerThreadData &pctd, const idx_t read_id, const idx_t sid, const idx_t eid) {
 	PackedDB& reads(ctd.reads);
 	ExtensionCandidate* overlaps((ExtensionCandidate*)pctd.candidates);
-	DiffRunningData* const drd(&pctd.drd);
+	DiffRunningData& drd(pctd.drd);
 	M5Record& m5(pctd.m5);
 	CnsAlns& cns_vec(pctd.cns_alns);
 	std::vector<CnsResult>& cns_results(pctd.cns_results);
@@ -319,8 +321,8 @@ void consensus_one_read_m4_pacbio(ConsensusThreadData& ctd, ConsensusPerThreadDa
 	std::string& ntstr(pctd.saln);
 	const int min_align_size(ctd.rco.min_align_size);
 	const int max_added(60);
-	CnsTableItem* cns_table(pctd.cns_table);
-	std::for_each(cns_table, cns_table + read_size, CnsTableItemCleaner());
+	std::vector<CnsTableItem>& cns_table(pctd.cns_table);
+	cns_table.assign(read_size);	// reset table
 	cns_vec.clear();
 	const idx_t L(sid);
 	const idx_t R(eid - sid <= max_added ? eid : L + max_added);
@@ -351,7 +353,7 @@ consensus_one_read_m4_nanopore(ConsensusThreadData& ctd, ConsensusPerThreadData 
 {
 	PackedDB& reads = ctd.reads;
 	ExtensionCandidate* overlaps = (ExtensionCandidate*)pctd.candidates;
-	DiffRunningData* drd = &pctd.drd;
+	DiffRunningData& drd = pctd.drd;
 	M5Record& m5 = pctd.m5;
 	CnsAlns& cns_vec = pctd.cns_alns;
 	std::vector<CnsResult>& cns_results = pctd.cns_results;
@@ -378,8 +380,8 @@ consensus_one_read_m4_nanopore(ConsensusThreadData& ctd, ConsensusPerThreadData 
 		std::sort(overlaps + sid, overlaps + eid, CompareOverlapByOverlapSize());
 	}
 
-	CnsTableItem* cns_table = pctd.cns_table;
-	std::for_each(cns_table, cns_table + read_size, CnsTableItemCleaner());
+	std::vector<CnsTableItem>& cns_table = pctd.cns_table;
+	cns_table.assign(read_size);	// reset table
 	cns_vec.clear();
 	for (idx_t i = L; i < R; ++i)
 	{
@@ -411,16 +413,18 @@ static inline int check_cov_stats(std::vector<uint1>& cov_stats, const int soff,
 	if (static_cast<int>(cov_stats.size()) < send) {
 		cov_stats.resize(send, 0);
 	}
-	const int max_cov(20);
 	int n(0);
 	for (int i(soff); i < send; ++i) {
-		if (cov_stats[i] >= max_cov) {
+		if (cov_stats[i] >= 20) {	// max coverage
 			++n;
 		}
 	}
 	if (send - soff >= n + 200) {
-		for (int i = soff; i < send; ++i) {
-			++cov_stats[i];
+		for (int i(soff); i < send; ++i) {
+			// don't let small redundant region cause overflow
+			if (cov_stats[i] != std::numeric_limits<uint1>::max()) {
+				++cov_stats[i];
+			}
 		}
 		return 1;
 	}
@@ -430,7 +434,7 @@ static inline int check_cov_stats(std::vector<uint1>& cov_stats, const int soff,
 void consensus_one_read_can_pacbio(ConsensusThreadData& ctd, ConsensusPerThreadData& pctd, const idx_t read_id, const idx_t sid, idx_t eid) {
 	const PackedDB& reads(ctd.reads);
 	ExtensionCandidateCompressed* candidates((ExtensionCandidateCompressed*)pctd.candidates);
-	DiffRunningData* const drd(&pctd.drd);
+	DiffRunningData& drd(pctd.drd);
 	M5Record& m5(pctd.m5);
 	CnsAlns& cns_vec(pctd.cns_alns);
 	std::vector<CnsResult>& cns_results(pctd.cns_results);
@@ -446,8 +450,8 @@ void consensus_one_read_can_pacbio(ConsensusThreadData& ctd, ConsensusPerThreadD
 	int num_added(0);
 	const int max_added(60);
 	eid = std::min(eid, sid + 200);		// max of 200 extents
-	CnsTableItem* cns_table(pctd.cns_table);
-	std::for_each(cns_table, cns_table + ssize, CnsTableItemCleaner());
+	std::vector<CnsTableItem>& cns_table(pctd.cns_table);
+	cns_table.assign(ssize);		// reset table
 	cns_vec.clear();
 	std::set<idx_t> used_ids;
 	std::vector<uint1>& id_list(pctd.id_list);		// used to be called cov_stats
@@ -485,7 +489,7 @@ void consensus_one_read_can_pacbio(ConsensusThreadData& ctd, ConsensusPerThreadD
 void consensus_one_read_can_nanopore(ConsensusThreadData& ctd, ConsensusPerThreadData &pctd, const idx_t read_id, const idx_t sid, const idx_t eid) {
 	PackedDB& reads(ctd.reads);
 	ExtensionCandidateCompressed* candidates((ExtensionCandidateCompressed*)pctd.candidates);
-	DiffRunningData* const drd(&pctd.drd);
+	DiffRunningData& drd(pctd.drd);
 	M5Record& m5(pctd.m5);
 	CnsAlns& cns_vec(pctd.cns_alns);
 	std::vector<CnsResult>& cns_results(pctd.cns_results);
@@ -501,8 +505,8 @@ void consensus_one_read_can_nanopore(ConsensusThreadData& ctd, ConsensusPerThrea
 	int num_added(0);
 	int num_ext(0);
 	const int max_ext(200);
-	CnsTableItem* cns_table(pctd.cns_table);
-	std::for_each(cns_table, cns_table + ssize, CnsTableItemCleaner());
+	std::vector<CnsTableItem>& cns_table(pctd.cns_table);
+	cns_table.assign(ssize);		// reset table
 	cns_vec.clear();
 	std::set<int> used_ids;
 	std::vector<uint1>& id_list(pctd.id_list);	// used to be called cov_stats
