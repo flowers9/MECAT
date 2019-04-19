@@ -335,7 +335,7 @@ void consensus_one_read_m4_pacbio(ConsensusThreadData& ctd, ConsensusPerThreadDa
 		const idx_t sext(ovlp.sext);
 		const bool r(GetAlignment(qstr.data(), qext, qstr.size(), tstr.data(), sext, tstr.size(), drd, m5, 0.15, min_align_size));
 		if (r) {
-			normalize_gaps(m5qaln(m5), m5saln(m5), strlen(m5qaln(m5)), nqstr, ntstr, true);
+			normalize_gaps(m5.m5qaln(), m5.m5saln(), nqstr, ntstr, true);
 			meap_add_one_aln(nqstr, ntstr, m5soff(m5), cns_table, tstr.data());
 			cns_vec.add_aln(m5soff(m5), m5send(m5), nqstr, ntstr);
 		}
@@ -390,7 +390,7 @@ consensus_one_read_m4_nanopore(ConsensusThreadData& ctd, ConsensusPerThreadData 
 		bool r = GetAlignment(qstr.data(), qext, qstr.size(), tstr.data(), sext, tstr.size(), drd, m5, 0.20, min_align_size);
 		if (r && check_ovlp_mapping_range(m5qoff(m5), m5qend(m5), ovlp.qsize, m5soff(m5), m5send(m5), ovlp.ssize, min_mapping_ratio))
 		{
-			normalize_gaps(m5qaln(m5), m5saln(m5), strlen(m5qaln(m5)), nqstr, ntstr, true);
+			normalize_gaps(m5.m5qaln(), m5.m5saln(), nqstr, ntstr, true);
 			meap_add_one_aln(nqstr, ntstr, m5soff(m5), cns_table, tstr.data());
 			cns_vec.add_aln(m5soff(m5), m5send(m5), nqstr, ntstr);
 		}
@@ -464,7 +464,7 @@ void consensus_one_read_can_pacbio(ConsensusThreadData& ctd, ConsensusPerThreadD
 			if (check_cov_stats(id_list, m5soff(m5), m5send(m5))) {
 				++num_added;
 				used_ids.insert(ec.qid);
-				normalize_gaps(m5qaln(m5), m5saln(m5), strlen(m5qaln(m5)), nqstr, ntstr, true);
+				normalize_gaps(m5.m5qaln(), m5.m5saln(), nqstr, ntstr, true);
 				meap_add_one_aln(nqstr, ntstr, m5soff(m5), cns_table, tstr.data());
 				cns_vec.add_aln(m5soff(m5), m5send(m5), nqstr, ntstr);
 			}
@@ -519,7 +519,7 @@ void consensus_one_read_can_nanopore(ConsensusThreadData& ctd, ConsensusPerThrea
 			if (check_cov_stats(id_list, m5soff(m5), m5send(m5))) {
 				++num_added;
 				used_ids.insert(ec.qid);
-				normalize_gaps(m5qaln(m5), m5saln(m5), strlen(m5qaln(m5)), nqstr, ntstr, true);
+				normalize_gaps(m5.m5qaln(), m5.m5saln(), nqstr, ntstr, true);
 				meap_add_one_aln(nqstr, ntstr, m5soff(m5), cns_table, tstr.data());
 				cns_vec.add_aln(m5soff(m5), m5send(m5), nqstr, ntstr);
 			}

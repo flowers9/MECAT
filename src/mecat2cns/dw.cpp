@@ -522,12 +522,9 @@ bool GetAlignment(const char* const query, const int query_start, const int quer
 	m5send(m5) = drd.result->target_end - tre;
 	m5sdir(m5) = FWD;
 	const int aln_size(end_aln_id - start_aln_id);
-	memcpy(m5qaln(m5), drd.result->out_store1 + start_aln_id, aln_size);
-	memcpy(m5saln(m5), drd.result->out_store2 + start_aln_id, aln_size);
-	memcpy(m5pat(m5), drd.result->out_match_pattern + start_aln_id, aln_size);
-	m5qaln(m5)[aln_size] = '\0';
-	m5saln(m5)[aln_size] = '\0';
-	m5pat(m5)[aln_size] = '\0';
+	m5.m5qaln().assign(drd.result->out_store1 + start_aln_id, aln_size);
+	m5.m5saln().assign(drd.result->out_store2 + start_aln_id, aln_size);
+	m5.m5pat().assign(drd.result->out_match_pattern + start_aln_id, aln_size);
 	return 1;
 }
 

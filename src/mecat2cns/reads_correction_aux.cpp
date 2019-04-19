@@ -1,6 +1,7 @@
 #include "reads_correction_aux.h"
+#include <string>	// string
 
-void normalize_gaps(const char* qstr, const char* tstr, const idx_t aln_size, std::string& qnorm, std::string& tnorm, const bool push)
+void normalize_gaps(const std::string& qstr, const std::string& tstr, std::string& qnorm, std::string& tnorm, const bool push)
 {
     qnorm.clear();
     tnorm.clear();
@@ -8,7 +9,7 @@ void normalize_gaps(const char* qstr, const char* tstr, const idx_t aln_size, st
 
 #ifndef NDEBUG
     int qcnt = 0, tcnt = 0;
-    for (idx_t i = 0; i < aln_size; ++i)
+    for (size_t i = 0; i < qstr.size(); ++i)
     {
         const char qc = qstr[i];
         const char tc = tstr[i];
@@ -18,7 +19,7 @@ void normalize_gaps(const char* qstr, const char* tstr, const idx_t aln_size, st
 #endif
 
     // convert mismatches to indels
-    for (idx_t i = 0; i < aln_size; ++i)
+    for (size_t i = 0; i < qstr.size(); ++i)
     {
         const char qc = qstr[i];
         const char tc = tstr[i];

@@ -242,20 +242,15 @@ class M5Record {
 	int	ins;		// 14) insertion
 	int	dels;		// 15) deletion
 	int	mapq;		// 16) mapQ
-	char*	pm_q;		// 17) aligned query
-	char*	pm_p;		// 18) aligned pattern
-	char*	pm_s;		// 19) aligned subject
+	std::string pm_q;	// 17) aligned query
+	std::string pm_p;	// 18) aligned pattern
+	std::string pm_s;	// 19) aligned subject
 	double	ident;		// 20) identity percentage
 	idx_t	qext;
 	idx_t 	sext;
     public:
-	M5Record() : pm_q(0), pm_p(0), pm_s(0) { }
-	explicit M5Record(const idx_t n) : pm_q(new char[n]), pm_p(new char[n]), pm_s(new char[n]) { }
-	~M5Record() {
-		delete[] pm_q;
-		delete[] pm_p;
-		delete[] pm_s;
-	}
+	explicit M5Record() { }
+	~M5Record() { }
 	idx_t& m5qid() {
 		return qid;
 	}
@@ -352,22 +347,22 @@ class M5Record {
 	const int m5mapq() const {
 		return mapq;
 	}
-	char*& m5qaln() {
+	std::string& m5qaln() {
 		return pm_q;
 	}
-	const char* m5qaln() const {
+	const std::string& m5qaln() const {
 		return pm_q;
 	}
-	char*& m5pat() {
+	std::string& m5pat() {
 		return pm_p;
 	}
-	const char* m5pat() const {
+	const std::string& m5pat() const {
 		return pm_p;
 	}
-	char*& m5saln() {
+	std::string& m5saln() {
 		return pm_s;
 	}
-	const char* m5saln() const {
+	const std::string& m5saln() const {
 		return pm_s;
 	}
 	double& m5ident() {
@@ -406,23 +401,12 @@ class M5Record {
 #define m5ins(m)		((m).ins)
 #define m5dels(m)		((m).dels)
 #define m5mapq(m)		((m).mapq)
-#define m5qaln(m)		((m).pm_q)
-#define m5pat(m)		((m).pm_p)
-#define m5saln(m)		((m).pm_s)
+//#define m5qaln(m)		((m).m5qaln())
+//#define m5pat(m)		((m).m5pat())
+//#define m5saln(m)		((m).m5saln())
 #define m5ident(m)		((m).ident)
 #define m5qext(m)		((m).qext)
 #define m5sext(m)		((m).sext)
-
-inline M5Record* NewM5Record(const idx_t maxAlnSize) {
-	return new M5Record(maxAlnSize);
-}
-
-inline M5Record* DeleteM5Record(M5Record* const m5) {
-	if (m5) {
-		delete m5;
-	}
-	return NULL;
-}
 
 inline int M5RecordOvlpSize(const M5Record& m) {
 	const int oq(m5qend(m) - m5qoff(m));

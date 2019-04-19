@@ -155,7 +155,7 @@ class ConsensusPerThreadData {
 	ns_banded_sw::DiffRunningData drd;	// XXX - reduce memory footprint
 	std::vector<CnsTableItem> cns_table;
 	std::vector<uint1> id_list;
-	M5Record m5;				// XXX - reduce memory footprint
+	M5Record m5;
 	CnsAlns cns_alns;
 	std::vector<CnsResult> cns_results;
 	std::vector<char> query;
@@ -163,7 +163,7 @@ class ConsensusPerThreadData {
 	std::string qaln;
 	std::string saln;
     public:
-	ConsensusPerThreadData() : drd(ns_banded_sw::DiffRunningData(ns_banded_sw::get_sw_parameters_small())), m5(MAX_SEQ_SIZE) {
+	ConsensusPerThreadData() : drd(ns_banded_sw::DiffRunningData(ns_banded_sw::get_sw_parameters_small())) {
 		// we'll definitely be seeing at least this much use,
 		// so might as well preallocate
 		cns_results.reserve(MAX_CNS_RESULTS);
@@ -282,7 +282,7 @@ class ConsensusThreadData {
 	std::string done_file_, ckpt_file_, ckpt_file_tmp_;
 };
 
-void normalize_gaps(const char* qstr, const char* tstr, const idx_t aln_size, std::string& qnorm, std::string& tnorm, bool push);
+void normalize_gaps(const std::string& qstr, const std::string& tstr, std::string& qnorm, std::string& tnorm, bool push);
 
 void allocate_ecs(ConsensusThreadData &data, ExtensionCandidate* ec_list, idx_t nec);
 void allocate_ecs(ConsensusThreadData &data, ExtensionCandidateCompressed* ec_list, idx_t nec);
