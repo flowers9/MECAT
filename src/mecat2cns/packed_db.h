@@ -18,38 +18,24 @@ class PackedDB {
 		idx_t memory_offset, size;
 	};
     public:
-	PackedDB() : pac(NULL), db_size(0), max_db_size(0) { }
+	explicit PackedDB() : pac(0), db_size(0), max_db_size(0) { }
 	~PackedDB() {
 		if (pac) {
 			safe_free(pac);
 		}
 	}
-	// only call one of load_fasta_db and open_db exactly once
-	void load_fasta_db(const char* fasta);
 	// returns number of reads
 	static size_t convert_fasta_to_db(const std::string& fasta, const std::string& output_prefix, idx_t min_size);
 	static void read_sizes(const std::string& output_prefix, std::vector<idx_t>& sizes);
+	// only call one of load_fasta_db and open_db exactly once
+	void load_fasta_db(const char* fasta);
 	// opens data file, reads in index file
 	void open_db(const std::string& filename, idx_t memory_footprint);
 	// returns number of candidates that can be processed
 	idx_t load_reads(const ExtensionCandidateCompressed* ec_list, idx_t nec);
-	void GetSequence(const idx_t id, const bool forward, char* const seq) const {
+	void GetSequence(const idx_t id, const bool forward, std::vector<char>& seq) const {
 		const SeqIndex &si(seq_idx[id]);
-		if (forward) {
-			const idx_t offset(si.memory_offset);
-			for (idx_t i(0); i < si.size; ++i) {
-				seq[i] = get_char(offset + i);
-			}
-		} else {
-			const idx_t offset(si.memory_offset + si.size - 1);
-			for (idx_t i(0); i < si.size; ++i) {
-				seq[i] = 3 - get_char(offset - i);
-			}
-		}
-	}
-	void GetSequence(const idx_t id, const bool forward, char* const seq, const idx_t size) const {
-		const SeqIndex &si(seq_idx[id]);
-		r_assert(size == si.size);
+		seq.resize(si.size);
 		if (forward) {
 			const idx_t offset(si.memory_offset);
 			for (idx_t i(0); i < si.size; ++i) {
@@ -69,7 +55,7 @@ class PackedDB {
 		return seq_idx[read_id].size;
 	}
     private:
-	static void set_char(u1_t* const p, const idx_t idx, const u1_t c) {
+	static void set_char(std::vector<uint1>& p, const idx_t idx, const u1_t c) {
 		p[idx >> 2] |= c << ((~idx & 3) << 1);
 	}
 	void set_char(const idx_t idx, const u1_t c) {

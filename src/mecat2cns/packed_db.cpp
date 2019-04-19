@@ -22,18 +22,18 @@ void PackedDB::add_one_seq(const Sequence& seq) {
 	if (max_db_size < needed_size) {
 		idx_t new_size(max_db_size > 1024 ? max_db_size : 1024);
 		for (; new_size < needed_size; new_size *= 2) { }
-		u1_t* new_pac(NULL);
-		safe_calloc(new_pac, u1_t, (new_size + 3) / 4);
+		uint1* new_pac(NULL);
+		safe_calloc(new_pac, uint1, (new_size + 3) / 4);
 		memcpy(new_pac, pac, (db_size + 3) / 4);
 		safe_free(pac);
 		pac = new_pac;
 		max_db_size = new_size;
 	}
 	const Sequence::str_t& org_seq(seq.sequence());
-	const u1_t* const table(get_dna_encode_table());
+	const uint1* const table(get_dna_encode_table());
 	unsigned int rand_char(0);	// spread out unknown sequence in a repeatable fashion
 	for (idx_t i(0); i < si.size; ++i, ++db_size) {
-		const u1_t c(table[static_cast<int>(org_seq[i])]);
+		const uint1 c(table[static_cast<int>(org_seq[i])]);
 		set_char(db_size, c < 4 ? c : ++rand_char & 3);
 	}
 }
@@ -95,8 +95,8 @@ size_t PackedDB::convert_fasta_to_db(const std::string& fasta, const std::string
 		return read_count;
 	}
 	DynamicTimer dtimer(__func__);
-	u1_t buffer[MAX_SEQ_SIZE];
-	const u1_t* const et(get_dna_encode_table());
+	std::vector<uint1> buffer;
+	const uint1* const et(get_dna_encode_table());
 	FastaReader fr(fasta.c_str());
 	const std::string pac_name_tmp(pac_name + ".tmp");
 	const std::string index_name_tmp(index_name + ".tmp");
@@ -137,12 +137,12 @@ size_t PackedDB::convert_fasta_to_db(const std::string& fasta, const std::string
 		Sequence::str_t& s(read.sequence());
 		const idx_t rbytes((rsize + 3) / 4);
 		// set_char uses | to set bits, so clear first
-		bzero(buffer, rbytes);
+		buffer.assign(rbytes, 0);
 		for (idx_t i(0); i < rsize; ++i) {
-			const u1_t c(et[static_cast<int>(s[i])]);
+			const uint1 c(et[static_cast<int>(s[i])]);
 			set_char(buffer, i, c < 4 ? c : ++rand_char & 3);
 		}
-		if (!pout.write((char*)buffer, rbytes)) {
+		if (!pout.write((char*)&buffer[0], rbytes)) {
 			ERROR("Write error to file %s", pac_name_tmp.c_str());
 		}
 		iout << pac_offset << "\t" << rsize << "\n";
@@ -182,7 +182,7 @@ void PackedDB::open_db(const std::string& path, const idx_t size) {
 	const idx_t file_size(pstream.tellg());
 	max_db_size = size ? std::min(file_size, size) : file_size;
 	if (max_db_size) {
-		safe_calloc(pac, u1_t, max_db_size);
+		safe_calloc(pac, uint1, max_db_size);
 	}
 	size_t read_count;
 	if (!pstream.read((char*)&read_count, sizeof(size_t))) {
@@ -214,7 +214,6 @@ void PackedDB::open_db(const std::string& path, const idx_t size) {
 		}
 		close_fstream(index);
 	}
-std::cerr << "open_db: read count " << read_count << ", index size " << seq_idx.size() << ", max db size " << max_db_size << "\n";
 }
 
 idx_t PackedDB::load_reads(const ExtensionCandidateCompressed* const ec_list, const idx_t nec) {
@@ -263,8 +262,7 @@ idx_t PackedDB::load_reads(const ExtensionCandidateCompressed* const ec_list, co
 	LOG(stderr, "using %ld bytes for %lu reads, %ld aligns (out of %ld)", total_size, read_ids.size(), i, nec);
 	if (max_db_size == 0) {
 		max_db_size = total_size;
-		safe_calloc(pac, u1_t, max_db_size);
-std::cerr << "load_reads: allocating " << max_db_size << "\n";
+		safe_calloc(pac, uint1, max_db_size);
 	}
 	// now read in the reads
 	std::set<idx_t>::const_iterator a(read_ids.begin());
@@ -306,7 +304,6 @@ void PackedDB::read_sizes(const std::string& output_prefix, std::vector<idx_t>& 
 		}
 		in.close();
 		sizes.reserve(read_count);
-std::cerr << "read_sizes: read_count " << read_count << "\n";
 	}
 	const std::string index_name(output_prefix + ".idx");
 	open_fstream(in, index_name.c_str(), std::ios::in);
@@ -314,5 +311,4 @@ std::cerr << "read_sizes: read_count " << read_count << "\n";
 	while (in >> i >> j) {
 		sizes.push_back(j);
 	}
-std::cerr << "read_sizes: sizes size " << sizes.size() << "\n";
 }

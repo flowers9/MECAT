@@ -413,10 +413,6 @@ class M5Record {
 #define m5qext(m)		((m).qext)
 #define m5sext(m)		((m).sext)
 
-void PrintM5Record(std::ostream& out, const M5Record& m5, const int printAln);
-void InitM5Record(M5Record& m5);
-void DestroyM5Record(M5Record& m5);
-
 inline M5Record* NewM5Record(const idx_t maxAlnSize) {
 	return new M5Record(maxAlnSize);
 }

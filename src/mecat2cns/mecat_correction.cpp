@@ -315,8 +315,7 @@ void consensus_one_read_m4_pacbio(ConsensusThreadData& ctd, ConsensusPerThreadDa
 	const idx_t read_size(overlaps[read_id].ssize);
 	std::vector<char>& qstr(pctd.query);
 	std::vector<char>& tstr(pctd.target);
-	tstr.resize(read_size);
-	reads.GetSequence(read_id, true, tstr.data(), read_size);
+	reads.GetSequence(read_id, 1, tstr);
 	std::string& nqstr(pctd.qaln);
 	std::string& ntstr(pctd.saln);
 	const int min_align_size(ctd.rco.min_align_size);
@@ -331,8 +330,7 @@ void consensus_one_read_m4_pacbio(ConsensusThreadData& ctd, ConsensusPerThreadDa
 	}
 	for (idx_t i(L); i < R; ++i) {
 		Overlap& ovlp(overlaps[i]);
-		qstr.resize(ovlp.qsize);
-		reads.GetSequence(ovlp.qid, ovlp.qdir == FWD, qstr.data(), ovlp.qsize);
+		reads.GetSequence(ovlp.qid, ovlp.qdir == FWD, qstr);
 		const idx_t qext(ovlp.qdir == FWD ? ovlp.qext : ovlp.qsize - 1 - ovlp.qext);
 		const idx_t sext(ovlp.sext);
 		const bool r(GetAlignment(qstr.data(), qext, qstr.size(), tstr.data(), sext, tstr.size(), drd, m5, 0.15, min_align_size));
@@ -360,8 +358,7 @@ consensus_one_read_m4_nanopore(ConsensusThreadData& ctd, ConsensusPerThreadData 
 	const idx_t read_size = overlaps[read_id].ssize;
 	std::vector<char>& qstr = pctd.query;
 	std::vector<char>& tstr = pctd.target;
-	tstr.resize(read_size);
-	reads.GetSequence(read_id, true, tstr.data(), read_size);
+	reads.GetSequence(read_id, 1, tstr);
 	std::string& nqstr = pctd.qaln;
 	std::string& ntstr = pctd.saln;
 	const int min_align_size = ctd.rco.min_align_size;
@@ -386,8 +383,7 @@ consensus_one_read_m4_nanopore(ConsensusThreadData& ctd, ConsensusPerThreadData 
 	for (idx_t i = L; i < R; ++i)
 	{
 		Overlap& ovlp = overlaps[i];
-		qstr.resize(ovlp.qsize);
-		reads.GetSequence(ovlp.qid, ovlp.qdir == FWD, qstr.data(), ovlp.qsize);
+		reads.GetSequence(ovlp.qid, ovlp.qdir == FWD, qstr);
 		idx_t qext = ovlp.qext;
 		idx_t sext = ovlp.sext;
 		if (ovlp.qdir == REV) qext = ovlp.qsize - 1 - qext;
@@ -441,8 +437,7 @@ void consensus_one_read_can_pacbio(ConsensusThreadData& ctd, ConsensusPerThreadD
 	const idx_t ssize(reads.read_size(read_id));
 	std::vector<char>& qstr(pctd.query);
 	std::vector<char>& tstr(pctd.target);
-	tstr.resize(ssize);
-	reads.GetSequence(read_id, true, tstr.data());
+	reads.GetSequence(read_id, 1, tstr);
 	std::string& nqstr(pctd.qaln);
 	std::string& ntstr(pctd.saln);
 	const int min_align_size(ctd.rco.min_align_size);
@@ -462,10 +457,9 @@ void consensus_one_read_can_pacbio(ConsensusThreadData& ctd, ConsensusPerThreadD
 			continue;
 		}
 		const idx_t qsize(reads.read_size(ec.qid));
-		qstr.resize(qsize);
-		reads.GetSequence(ec.qid, ec.qdir() == FWD, qstr.data());
+		reads.GetSequence(ec.qid, ec.qdir() == FWD, qstr);
 		const idx_t qext(ec.qdir() == FWD ? ec.qext() : qsize - 1 - ec.qext());
-		const bool r(GetAlignment(qstr.data(), qext, qsize, tstr.data(), ec.sext, tstr.size(), drd, m5, 0.15, min_align_size));
+		const bool r(GetAlignment(qstr.data(), qext, qstr.size(), tstr.data(), ec.sext, tstr.size(), drd, m5, 0.15, min_align_size));
 		if (r && check_ovlp_mapping_range(m5qoff(m5), m5qend(m5), qsize, m5soff(m5), m5send(m5), ssize, min_mapping_ratio)) {
 			if (check_cov_stats(id_list, m5soff(m5), m5send(m5))) {
 				++num_added;
@@ -496,8 +490,7 @@ void consensus_one_read_can_nanopore(ConsensusThreadData& ctd, ConsensusPerThrea
 	const idx_t ssize(reads.read_size(read_id));
 	std::vector<char>& qstr = pctd.query;
 	std::vector<char>& tstr = pctd.target;
-	tstr.resize(ssize);
-	reads.GetSequence(read_id, true, tstr.data());
+	reads.GetSequence(read_id, 1, tstr);
 	std::string& nqstr(pctd.qaln);
 	std::string& ntstr(pctd.saln);
 	const int min_align_size(ctd.rco.min_align_size);
@@ -518,8 +511,7 @@ void consensus_one_read_can_nanopore(ConsensusThreadData& ctd, ConsensusPerThrea
 			continue;
 		}
 		const idx_t qsize(reads.read_size(ec.qid));
-		qstr.resize(qsize);
-		reads.GetSequence(ec.qid, ec.qdir() == FWD, qstr.data());
+		reads.GetSequence(ec.qid, ec.qdir() == FWD, qstr);
 		const idx_t sext(ec.sext);
 		const idx_t qext(ec.qdir() == FWD ? ec.qext() : qsize - 1 - ec.qext());
 		const bool r(GetAlignment(qstr.data(), qext, qstr.size(), tstr.data(), sext, tstr.size(), drd, m5, 0.20, min_align_size));
