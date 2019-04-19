@@ -152,7 +152,7 @@ class ConsensusPerThreadData {
 	// this is ExtensionCandidate for m4 runs, ExtensionCandidateCompressed
 	// for candidate runs (to reduce memory usage)
 	void* candidates;
-	ns_banded_sw::DiffRunningData drd;	// XXX - reduce memory footprint
+	DiffRunningData drd;	// XXX - reduce memory footprint
 	std::vector<CnsTableItem> cns_table;
 	std::vector<uint1> id_list;
 	M5Record m5;
@@ -163,7 +163,7 @@ class ConsensusPerThreadData {
 	std::string qaln;
 	std::string saln;
     public:
-	ConsensusPerThreadData() : drd(ns_banded_sw::DiffRunningData(ns_banded_sw::get_sw_parameters_small())) {
+	ConsensusPerThreadData() : drd(DiffRunningData(get_sw_parameters_small())) {
 		// we'll definitely be seeing at least this much use,
 		// so might as well preallocate
 		cns_results.reserve(MAX_CNS_RESULTS);

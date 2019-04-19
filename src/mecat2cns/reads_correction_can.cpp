@@ -25,7 +25,7 @@ static void* reads_correction_func_can(void* const arg) {
 			if (i - start < data.rco.min_cov) {
 				continue;
 			}
-			ns_meap_cns::consensus_one_read_can_pacbio(data, pdata, sid, start, i);
+			consensus_one_read_can_pacbio(data, pdata, sid, start, i);
 			if (pdata.cns_results.size() >= MAX_CNS_RESULTS) {
 				data.write_buffer(tid, i);
 			}
@@ -38,7 +38,7 @@ static void* reads_correction_func_can(void* const arg) {
 			if (i - start < data.rco.min_cov) {
 				continue;
 			}
-			ns_meap_cns::consensus_one_read_can_nanopore(data, pdata, sid, start, i);
+			consensus_one_read_can_nanopore(data, pdata, sid, start, i);
 			if (pdata.cns_results.size() >= MAX_CNS_RESULTS) {
 				data.write_buffer(tid, i);
 			}

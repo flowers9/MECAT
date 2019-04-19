@@ -4,10 +4,6 @@
 
 #include <limits>	// numeric_limits::max()
 
-using namespace ns_banded_sw;
-
-namespace ns_meap_cns {
-
 #define FMAT 1
 #define FDEL 2
 #define FINS 4
@@ -67,7 +63,7 @@ static void meap_add_one_aln(const std::string& qaln, const std::string& saln, i
 }
 
 static void meap_cns_one_indel(const int sb, const int se, CnsAlns& cns_vec, const int min_cov, std::string& aux_qstr, std::string& aux_tstr, std::string& cns) {
-	AlnGraphBoost ag(se - sb + 1);
+	ns_meap_cns::AlnGraphBoost ag(se - sb + 1);
 	int sb_out;
 	for (std::vector<CnsAln>::iterator a(cns_vec.begin()); a != cns_vec.end(); ++a) {
 		if (a->retrieve_aln_subseqs(sb, se, aux_qstr, aux_tstr, sb_out)) {
@@ -529,5 +525,3 @@ void consensus_one_read_can_nanopore(ConsensusThreadData& ctd, ConsensusPerThrea
 	eranges.push_back(MappingRange(0, ssize));
 	consensus_worker(cns_table, pctd.id_list, cns_vec, nqstr, ntstr, eranges, ctd.rco.min_cov, ctd.rco.min_size, read_id,  cns_results);
 }
-
-} // namespace ns_meap_cns {

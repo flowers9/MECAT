@@ -30,9 +30,9 @@ void* reads_correction_func_m4(void* arg) {
 			continue;
 		}
 		if (data.rco.tech == TECH_PACBIO) {
-			ns_meap_cns::consensus_one_read_m4_pacbio(data, pdata, sid, i, j);
+			consensus_one_read_m4_pacbio(data, pdata, sid, i, j);
 		} else {
-			ns_meap_cns::consensus_one_read_m4_nanopore(data, pdata, sid, i, j);
+			consensus_one_read_m4_nanopore(data, pdata, sid, i, j);
 		}
 		if (pdata.cns_results.size() >= MAX_CNS_RESULTS) {
 			pthread_mutex_lock(&data.out_lock);

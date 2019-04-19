@@ -3,8 +3,6 @@
 
 #include "reads_correction_aux.h"
 
-namespace ns_meap_cns {
-
 void
 consensus_one_read_m4_pacbio(ConsensusThreadData& ctd, ConsensusPerThreadData &cptd, const idx_t read_id, const idx_t sid, const idx_t eid);
 
@@ -16,7 +14,5 @@ consensus_one_read_can_pacbio(ConsensusThreadData& ctd, ConsensusPerThreadData &
 
 void
 consensus_one_read_can_nanopore(ConsensusThreadData& ctd, ConsensusPerThreadData &cptd, const idx_t read_id, const idx_t sid, const idx_t eid);
-
-} // namespace ns_meap_cns
 
 #endif // MEAP_CORRECTION_H
