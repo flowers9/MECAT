@@ -13,12 +13,13 @@ struct SW_Parameters {
 	idx_t row_size;
 	idx_t column_size;
 	idx_t segment_aln_size;
-	SW_Parameters(const idx_t i, const idx_t j, const idx_t k, const idx_t l) : segment_size(i), row_size(j), column_size(k), segment_aln_size(l) { }
+	idx_t max_aln_size;
+	SW_Parameters(const idx_t i, const idx_t j, const idx_t k, const idx_t l, const idx_t m) : segment_size(i), row_size(j), column_size(k), segment_aln_size(l), max_aln_size(m) { }
 };
 
 inline SW_Parameters get_sw_parameters_small() {
-	// 1000 instead of 500 for large
-	return SW_Parameters(500, 4096, 4096, 4096);
+	// 1000 instead of 500 for "large"
+	return SW_Parameters(500, 4096, 4096, 4096, 2 * MAX_SEQ_SIZE);
 }
 
 struct Alignment {
@@ -110,7 +111,7 @@ class DiffRunningData {
 	std::vector<DPathData2> d_path;
 	std::vector<PathPoint> aln_path;
     public:
-	explicit DiffRunningData(const SW_Parameters& swp_in) : swp(swp_in), align(swp_in.segment_aln_size), result(swp_in.segment_aln_size) { }
+	explicit DiffRunningData(const SW_Parameters& swp_in) : swp(swp_in), align(swp_in.segment_aln_size), result(swp_in.max_aln_size) { }
 	~DiffRunningData() { }
 };
 
