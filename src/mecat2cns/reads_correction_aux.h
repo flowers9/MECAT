@@ -158,10 +158,7 @@ class ConsensusPerThreadData {
 	M5Record m5;
 	CnsAlns cns_alns;
 	std::vector<CnsResult> cns_results;
-	std::vector<char> query;
-	std::vector<char> target;
-	std::string qaln;
-	std::string saln;
+	std::string query, target, qaln, saln;
     public:
 	ConsensusPerThreadData() : drd(DiffRunningData(get_sw_parameters_small())) {
 		// we'll definitely be seeing at least this much use,

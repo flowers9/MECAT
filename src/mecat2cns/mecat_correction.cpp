@@ -37,7 +37,7 @@ struct CompareOverlapByOverlapSize
 	}
 };
 
-static void meap_add_one_aln(const std::string& qaln, const std::string& saln, idx_t start_soff, std::vector<CnsTableItem>& cns_table, const char* const org_seq) {
+static void meap_add_one_aln(const std::string& qaln, const std::string& saln, idx_t start_soff, std::vector<CnsTableItem>& cns_table) {
 	r_assert(qaln.size() == saln.size());
 	const idx_t aln_size(qaln.size());
 	for (idx_t i(0); i < aln_size;) {
@@ -242,7 +242,7 @@ static void consensus_worker(const std::vector<CnsTableItem>& cns_table, std::ve
 	}
 }
 
-static void decode_and_append_sequence(std::string& s, const char* const seq, idx_t i, const idx_t end_i) {
+static void decode_and_append_sequence(std::string& s, const std::string& seq, idx_t i, const idx_t end_i) {
 	s.reserve(s.size() + end_i - i);
 	for (; i < end_i; ++i) {
 		s += "ACGT"[static_cast<int>(seq[i])];
@@ -252,7 +252,7 @@ static void decode_and_append_sequence(std::string& s, const char* const seq, id
 // same as consensus_worker, but produces entire read as one entry;
 // uncorrected sections are just copied as is;
 
-static void consensus_worker_one_read(const std::vector<CnsTableItem>& cns_table, std::vector<uint1>& id_list, CnsAlns& cns_vec, std::string& aux_qstr, std::string& aux_tstr, const std::vector<MappingRange>& eranges, const int min_cov, const int min_size, const int read_id, const std::vector<char>& tstr, std::vector<CnsResult>& cns_results) {
+static void consensus_worker_one_read(const std::vector<CnsTableItem>& cns_table, std::vector<uint1>& id_list, CnsAlns& cns_vec, std::string& aux_qstr, std::string& aux_tstr, const std::vector<MappingRange>& eranges, const int min_cov, const int min_size, const int read_id, const std::string& tstr, std::vector<CnsResult>& cns_results) {
 	CnsResult cns_result;
 	cns_result.id = read_id;
 	const idx_t min_size_95(std::max<int>(ceil(0.95 * min_size), 1) - 1);
@@ -262,9 +262,9 @@ static void consensus_worker_one_read(const std::vector<CnsTableItem>& cns_table
 	std::vector<MappingRange>::const_iterator last_a(eranges.end());
 	for (; a != end_a; last_a = a++) {
 		if (last_a != end_a) {		// add in-between range to cns_result
-			decode_and_append_sequence(cns_result.seq, tstr.data(), last_a->end, a->start);
+			decode_and_append_sequence(cns_result.seq, tstr, last_a->end, a->start);
 		} else if (a->start > 0) {	// add beginning of read
-			decode_and_append_sequence(cns_result.seq, tstr.data(), 0, a->start);
+			decode_and_append_sequence(cns_result.seq, tstr, 0, a->start);
 		}
 		const int begin_i(a->start - 1);
 		const int end_i(a->end);
@@ -273,7 +273,7 @@ static void consensus_worker_one_read(const std::vector<CnsTableItem>& cns_table
 			const idx_t last_end(i != begin_i ? i : a->start);
 			for (++i; i < end_i && cns_table[i].mat_cnt + cns_table[i].ins_cnt < min_cov; ++i) { }
 			// add low coverage area as-is
-			decode_and_append_sequence(cns_result.seq, tstr.data(), last_end, i);
+			decode_and_append_sequence(cns_result.seq, tstr, last_end, i);
 			if (i == end_i) {
 				break;
 			}
@@ -289,12 +289,12 @@ static void consensus_worker_one_read(const std::vector<CnsTableItem>& cns_table
 				}
 			}
 			// add uncorrected sequence
-			decode_and_append_sequence(cns_result.seq, tstr.data(), start, i);
+			decode_and_append_sequence(cns_result.seq, tstr, start, i);
 		}
 	}
 	// add end of read
 	if (last_a != end_a) {
-		decode_and_append_sequence(cns_result.seq, tstr.data(), last_a->end, tstr.size());
+		decode_and_append_sequence(cns_result.seq, tstr, last_a->end, tstr.size());
 	}
 	cns_result.range[0] = 0;
 	cns_result.range[1] = cns_result.seq.size();
@@ -309,8 +309,8 @@ void consensus_one_read_m4_pacbio(ConsensusThreadData& ctd, ConsensusPerThreadDa
 	CnsAlns& cns_vec(pctd.cns_alns);
 	std::vector<CnsResult>& cns_results(pctd.cns_results);
 	const idx_t read_size(overlaps[read_id].ssize);
-	std::vector<char>& qstr(pctd.query);
-	std::vector<char>& tstr(pctd.target);
+	std::string& qstr(pctd.query);
+	std::string& tstr(pctd.target);
 	reads.GetSequence(read_id, 1, tstr);
 	std::string& nqstr(pctd.qaln);
 	std::string& ntstr(pctd.saln);
@@ -329,11 +329,11 @@ void consensus_one_read_m4_pacbio(ConsensusThreadData& ctd, ConsensusPerThreadDa
 		reads.GetSequence(ovlp.qid, ovlp.qdir == FWD, qstr);
 		const idx_t qext(ovlp.qdir == FWD ? ovlp.qext : ovlp.qsize - 1 - ovlp.qext);
 		const idx_t sext(ovlp.sext);
-		const bool r(GetAlignment(qstr.data(), qext, qstr.size(), tstr.data(), sext, tstr.size(), drd, m5, 0.15, min_align_size));
+		const bool r(GetAlignment(qstr, qext, tstr, sext, drd, m5, 0.15, min_align_size));
 		if (r) {
 			normalize_gaps(m5.m5qaln(), m5.m5saln(), nqstr, ntstr, true);
-			meap_add_one_aln(nqstr, ntstr, m5soff(m5), cns_table, tstr.data());
-			cns_vec.add_aln(m5soff(m5), m5send(m5), nqstr, ntstr);
+			meap_add_one_aln(nqstr, ntstr, m5.m5soff(), cns_table);
+			cns_vec.add_aln(m5.m5soff(), m5.m5send(), nqstr, ntstr);
 		}
 	}
 	std::vector<MappingRange> mranges, eranges;
@@ -352,8 +352,8 @@ consensus_one_read_m4_nanopore(ConsensusThreadData& ctd, ConsensusPerThreadData 
 	CnsAlns& cns_vec = pctd.cns_alns;
 	std::vector<CnsResult>& cns_results = pctd.cns_results;
 	const idx_t read_size = overlaps[read_id].ssize;
-	std::vector<char>& qstr = pctd.query;
-	std::vector<char>& tstr = pctd.target;
+	std::string& qstr = pctd.query;
+	std::string& tstr = pctd.target;
 	reads.GetSequence(read_id, 1, tstr);
 	std::string& nqstr = pctd.qaln;
 	std::string& ntstr = pctd.saln;
@@ -383,12 +383,12 @@ consensus_one_read_m4_nanopore(ConsensusThreadData& ctd, ConsensusPerThreadData 
 		idx_t qext = ovlp.qext;
 		idx_t sext = ovlp.sext;
 		if (ovlp.qdir == REV) qext = ovlp.qsize - 1 - qext;
-		bool r = GetAlignment(qstr.data(), qext, qstr.size(), tstr.data(), sext, tstr.size(), drd, m5, 0.20, min_align_size);
-		if (r && check_ovlp_mapping_range(m5qoff(m5), m5qend(m5), ovlp.qsize, m5soff(m5), m5send(m5), ovlp.ssize, min_mapping_ratio))
+		bool r = GetAlignment(qstr, qext, tstr, sext, drd, m5, 0.20, min_align_size);
+		if (r && check_ovlp_mapping_range(m5.m5qoff(), m5.m5qend(), ovlp.qsize, m5.m5soff(), m5.m5send(), ovlp.ssize, min_mapping_ratio))
 		{
 			normalize_gaps(m5.m5qaln(), m5.m5saln(), nqstr, ntstr, true);
-			meap_add_one_aln(nqstr, ntstr, m5soff(m5), cns_table, tstr.data());
-			cns_vec.add_aln(m5soff(m5), m5send(m5), nqstr, ntstr);
+			meap_add_one_aln(nqstr, ntstr, m5.m5soff(), cns_table);
+			cns_vec.add_aln(m5.m5soff(), m5.m5send(), nqstr, ntstr);
 		}
 	}
 	
@@ -431,8 +431,8 @@ void consensus_one_read_can_pacbio(ConsensusThreadData& ctd, ConsensusPerThreadD
 	CnsAlns& cns_vec(pctd.cns_alns);
 	std::vector<CnsResult>& cns_results(pctd.cns_results);
 	const idx_t ssize(reads.read_size(read_id));
-	std::vector<char>& qstr(pctd.query);
-	std::vector<char>& tstr(pctd.target);
+	std::string& qstr(pctd.query);
+	std::string& tstr(pctd.target);
 	reads.GetSequence(read_id, 1, tstr);
 	std::string& nqstr(pctd.qaln);
 	std::string& ntstr(pctd.saln);
@@ -455,14 +455,14 @@ void consensus_one_read_can_pacbio(ConsensusThreadData& ctd, ConsensusPerThreadD
 		const idx_t qsize(reads.read_size(ec.qid));
 		reads.GetSequence(ec.qid, ec.qdir() == FWD, qstr);
 		const idx_t qext(ec.qdir() == FWD ? ec.qext() : qsize - 1 - ec.qext());
-		const bool r(GetAlignment(qstr.data(), qext, qstr.size(), tstr.data(), ec.sext, tstr.size(), drd, m5, 0.15, min_align_size));
-		if (r && check_ovlp_mapping_range(m5qoff(m5), m5qend(m5), qsize, m5soff(m5), m5send(m5), ssize, min_mapping_ratio)) {
-			if (check_cov_stats(id_list, m5soff(m5), m5send(m5))) {
+		const bool r(GetAlignment(qstr, qext, tstr, ec.sext, drd, m5, 0.15, min_align_size));
+		if (r && check_ovlp_mapping_range(m5.m5qoff(), m5.m5qend(), qsize, m5.m5soff(), m5.m5send(), ssize, min_mapping_ratio)) {
+			if (check_cov_stats(id_list, m5.m5soff(), m5.m5send())) {
 				++num_added;
 				used_ids.insert(ec.qid);
 				normalize_gaps(m5.m5qaln(), m5.m5saln(), nqstr, ntstr, true);
-				meap_add_one_aln(nqstr, ntstr, m5soff(m5), cns_table, tstr.data());
-				cns_vec.add_aln(m5soff(m5), m5send(m5), nqstr, ntstr);
+				meap_add_one_aln(nqstr, ntstr, m5.m5soff(), cns_table);
+				cns_vec.add_aln(m5.m5soff(), m5.m5send(), nqstr, ntstr);
 			}
 		}
 	}
@@ -484,8 +484,8 @@ void consensus_one_read_can_nanopore(ConsensusThreadData& ctd, ConsensusPerThrea
 	CnsAlns& cns_vec(pctd.cns_alns);
 	std::vector<CnsResult>& cns_results(pctd.cns_results);
 	const idx_t ssize(reads.read_size(read_id));
-	std::vector<char>& qstr = pctd.query;
-	std::vector<char>& tstr = pctd.target;
+	std::string& qstr(pctd.query);
+	std::string& tstr(pctd.target);
 	reads.GetSequence(read_id, 1, tstr);
 	std::string& nqstr(pctd.qaln);
 	std::string& ntstr(pctd.saln);
@@ -510,14 +510,14 @@ void consensus_one_read_can_nanopore(ConsensusThreadData& ctd, ConsensusPerThrea
 		reads.GetSequence(ec.qid, ec.qdir() == FWD, qstr);
 		const idx_t sext(ec.sext);
 		const idx_t qext(ec.qdir() == FWD ? ec.qext() : qsize - 1 - ec.qext());
-		const bool r(GetAlignment(qstr.data(), qext, qstr.size(), tstr.data(), sext, tstr.size(), drd, m5, 0.20, min_align_size));
-		if (r && check_ovlp_mapping_range(m5qoff(m5), m5qend(m5), qsize, m5soff(m5), m5send(m5), ssize, min_mapping_ratio)) {
-			if (check_cov_stats(id_list, m5soff(m5), m5send(m5))) {
+		const bool r(GetAlignment(qstr, qext, tstr, sext, drd, m5, 0.20, min_align_size));
+		if (r && check_ovlp_mapping_range(m5.m5qoff(), m5.m5qend(), qsize, m5.m5soff(), m5.m5send(), ssize, min_mapping_ratio)) {
+			if (check_cov_stats(id_list, m5.m5soff(), m5.m5send())) {
 				++num_added;
 				used_ids.insert(ec.qid);
 				normalize_gaps(m5.m5qaln(), m5.m5saln(), nqstr, ntstr, true);
-				meap_add_one_aln(nqstr, ntstr, m5soff(m5), cns_table, tstr.data());
-				cns_vec.add_aln(m5soff(m5), m5send(m5), nqstr, ntstr);
+				meap_add_one_aln(nqstr, ntstr, m5.m5soff(), cns_table);
+				cns_vec.add_aln(m5.m5soff(), m5.m5send(), nqstr, ntstr);
 			}
 		}
 	}

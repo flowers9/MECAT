@@ -12,8 +12,6 @@
 #include "reads_correction_aux.h"
 #include "packed_db.h"	// PackedDB
 
-#define error_and_exit(msg) { std::cerr << msg << "\n"; abort(); }
-
 inline static bool query_is_contained(const M4Record& m4, const double min_cov_ratio) {
 	return m4qend(m4) - m4qoff(m4) >= m4qsize(m4) * min_cov_ratio;
 }

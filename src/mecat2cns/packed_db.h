@@ -33,7 +33,7 @@ class PackedDB {
 	void open_db(const std::string& filename, idx_t memory_footprint);
 	// returns number of candidates that can be processed
 	idx_t load_reads(const ExtensionCandidateCompressed* ec_list, idx_t nec);
-	void GetSequence(const idx_t id, const bool forward, std::vector<char>& seq) const {
+	void GetSequence(const idx_t id, const bool forward, std::string& seq) const {
 		const SeqIndex &si(seq_idx[id]);
 		seq.resize(si.size);
 		if (forward) {

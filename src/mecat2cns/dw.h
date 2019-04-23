@@ -9,78 +9,53 @@
 #include "../common/defs.h"
 
 struct SW_Parameters {
-	idx_t segment_size;
-	idx_t row_size;
-	idx_t column_size;
-	idx_t segment_aln_size;
-	idx_t max_aln_size;
-	SW_Parameters(const idx_t i, const idx_t j, const idx_t k, const idx_t l, const idx_t m) : segment_size(i), row_size(j), column_size(k), segment_aln_size(l), max_aln_size(m) { }
+	int segment_size;
+	int row_size;
+	int column_size;
+	SW_Parameters(const int i, const int j, const int k) : segment_size(i), row_size(j), column_size(k) { }
 };
 
 inline SW_Parameters get_sw_parameters_small() {
 	// 1000 instead of 500 for "large"
-	return SW_Parameters(500, 4096, 4096, 4096, 2 * MAX_SEQ_SIZE);
+	return SW_Parameters(500, 4096, 4096);
 }
 
-struct Alignment {
-	int aln_str_size;
+class Alignment {
+    public:
 	int dist;
-	int aln_q_s;
-	int aln_q_e;
-	int aln_t_s;
-	int aln_t_e;
-	char* q_aln_str;
-	char* t_aln_str;
-	void init() {
-		aln_str_size = 0;
-		aln_q_s = aln_q_e = 0;
-		aln_t_s = aln_t_e = 0;
-	}
-	Alignment(const idx_t max_aln_size) {
-		safe_malloc(q_aln_str, char, max_aln_size);
-		safe_malloc(t_aln_str, char, max_aln_size);
-	}
-	~Alignment() {
-		safe_free(q_aln_str);
-		safe_free(t_aln_str);
+	int aln_q_s, aln_q_e;
+	int aln_t_s, aln_t_e;
+	std::string q_aln_str;
+	std::string t_aln_str;
+    public:
+	explicit Alignment() { }
+	~Alignment() { }
+	void clear() {
+		q_aln_str.clear();
+		t_aln_str.clear();
 	}
 };
 
-struct OutputStore {
-	char* left_store1;
-	char* left_store2;
-	char* right_store1;
-	char* right_store2;
-	char* out_store1;
-	char* out_store2;
-	char* out_match_pattern;
-	int left_store_size;
-	int right_store_size;
-	int out_store_size;
+class OutputStore {
+    public:
 	int query_start, query_end;
 	int target_start, target_end;
 	int mat, mis, ins, del;
-	double ident;
-	OutputStore(const idx_t max_aln_size) {
-		safe_malloc(left_store1, char, max_aln_size);
-		safe_malloc(left_store2, char, max_aln_size);
-		safe_malloc(right_store1, char, max_aln_size);
-		safe_malloc(right_store2, char, max_aln_size);
-		safe_malloc(out_store1, char, max_aln_size);
-		safe_malloc(out_store2, char, max_aln_size);
-		safe_malloc(out_match_pattern, char, max_aln_size);
-	}
-	~OutputStore() {
-		safe_free(left_store1);
-		safe_free(left_store2);
-		safe_free(right_store1);
-		safe_free(right_store2);
-		safe_free(out_store1);
-		safe_free(out_store2);
-		safe_free(out_match_pattern);
-	}
-	void init() {
-		left_store_size = right_store_size = out_store_size = 0;
+	std::string left_store1, left_store2;
+	std::string right_store1, right_store2;
+	std::string out_store1, out_store2;
+	std::string out_match_pattern;
+    public:
+	explicit OutputStore() { }
+	~OutputStore() { }
+	void clear() {
+		left_store1.clear();
+		left_store2.clear();
+		right_store1.clear();
+		right_store2.clear();
+		out_store1.clear();
+		out_store2.clear();
+		out_match_pattern.clear();
 	}
 };
 
@@ -103,7 +78,7 @@ struct PathPoint {
 
 class DiffRunningData {
     public:
-	SW_Parameters swp;
+	const SW_Parameters swp;
 	Alignment align;
 	OutputStore result;
 	std::string query, target;
@@ -111,24 +86,10 @@ class DiffRunningData {
 	std::vector<DPathData2> d_path;
 	std::vector<PathPoint> aln_path;
     public:
-	explicit DiffRunningData(const SW_Parameters& swp_in) : swp(swp_in), align(swp_in.segment_aln_size), result(swp_in.max_aln_size) { }
+	explicit DiffRunningData(const SW_Parameters& swp_in) : swp(swp_in) { }
 	~DiffRunningData() { }
 };
 
-struct CandidateStartPosition {
-	idx_t qoff;
-	idx_t toff;
-	idx_t tstart;
-	idx_t tsize;
-	idx_t tid;
-	int left_q, left_t;
-	int right_q, right_t;
-	int num1, num2;
-	int score;
-	idx_t toff_in_aln;
-	char chain;
-};
-
-bool GetAlignment(const char* query, int query_start, int query_size, const char* target, int target_start, int target_size, DiffRunningData& drd, M5Record& m5, double error_rate, int min_aln_size);
+bool GetAlignment(const std::string& query, int query_start, const std::string& target, int target_start, DiffRunningData& drd, M5Record& m5, double error_rate, int min_aln_size);
 
 #endif  // DW_H

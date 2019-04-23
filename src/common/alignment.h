@@ -385,55 +385,21 @@ class M5Record {
 	}
 };
 
-#define m5qid(m) 		((m).qid)
-#define m5qsize(m)		((m).qsize)
-#define m5qoff(m)		((m).qstart)
-#define m5qend(m)		((m).qend)
-#define m5qdir(m)		((m).qdir)
-#define m5sid(m)		((m).sid)
-#define m5ssize(m)		((m).ssize)
-#define m5soff(m)		((m).sstart)
-#define m5send(m)		((m).send)
-#define m5sdir(m)		((m).sdir)
-#define m5score(m)		((m).score)
-#define m5mat(m)		((m).mat)
-#define m5mis(m)		((m).mis)
-#define m5ins(m)		((m).ins)
-#define m5dels(m)		((m).dels)
-#define m5mapq(m)		((m).mapq)
-//#define m5qaln(m)		((m).m5qaln())
-//#define m5pat(m)		((m).m5pat())
-//#define m5saln(m)		((m).m5saln())
-#define m5ident(m)		((m).ident)
-#define m5qext(m)		((m).qext)
-#define m5sext(m)		((m).sext)
-
 inline int M5RecordOvlpSize(const M5Record& m) {
-	const int oq(m5qend(m) - m5qoff(m));
-	const int os(m5send(m) - m5soff(m));
+	const int oq(m.m5qend() - m.m5qoff());
+	const int os(m.m5send() - m.m5soff());
 	return std::max(oq, os);
 }
 
-//struct Overlap
-//{
-//    idx_t qid, qoff, qend, qsize, qext;
-//    int qdir;
-//    idx_t sid, soff, send, ssize, sext;
-//    int sdir;
-//};
-
 typedef ExtensionCandidate Overlap;
 
-struct CompareOverlapBySid
-{
-    bool operator()(const Overlap& a, const Overlap& b)
-    {
-        return a.sid < b.sid;
-    }
+struct CompareOverlapBySid {
+	bool operator()(const Overlap& a, const Overlap& b) {
+		return a.sid < b.sid;
+	}
 };
 
-struct CnsResult
-{
+struct CnsResult {
 	idx_t id;
 	idx_t range[2];
 	std::string seq;
