@@ -243,7 +243,7 @@ class M5Record {
 	int	dels;		// 15) deletion
 	int	mapq;		// 16) mapQ
 	std::string pm_q;	// 17) aligned query
-	std::string pm_p;	// 18) aligned pattern
+	//std::string pm_p;	// 18) aligned pattern
 	std::string pm_s;	// 19) aligned subject
 	double	ident;		// 20) identity percentage
 	idx_t	qext;
@@ -352,12 +352,6 @@ class M5Record {
 	}
 	const std::string& m5qaln() const {
 		return pm_q;
-	}
-	std::string& m5pat() {
-		return pm_p;
-	}
-	const std::string& m5pat() const {
-		return pm_p;
 	}
 	std::string& m5saln() {
 		return pm_s;

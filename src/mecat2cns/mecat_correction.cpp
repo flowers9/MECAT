@@ -331,7 +331,7 @@ void consensus_one_read_m4_pacbio(ConsensusThreadData& ctd, ConsensusPerThreadDa
 		const idx_t sext(ovlp.sext);
 		const bool r(GetAlignment(qstr, qext, tstr, sext, drd, m5, 0.15, min_align_size));
 		if (r) {
-			normalize_gaps(m5.m5qaln(), m5.m5saln(), nqstr, ntstr, true);
+			normalize_gaps(m5.m5qaln(), m5.m5saln(), nqstr, ntstr, 1);
 			meap_add_one_aln(nqstr, ntstr, m5.m5soff(), cns_table);
 			cns_vec.add_aln(m5.m5soff(), m5.m5send(), nqstr, ntstr);
 		}
@@ -386,7 +386,7 @@ consensus_one_read_m4_nanopore(ConsensusThreadData& ctd, ConsensusPerThreadData 
 		bool r = GetAlignment(qstr, qext, tstr, sext, drd, m5, 0.20, min_align_size);
 		if (r && check_ovlp_mapping_range(m5.m5qoff(), m5.m5qend(), ovlp.qsize, m5.m5soff(), m5.m5send(), ovlp.ssize, min_mapping_ratio))
 		{
-			normalize_gaps(m5.m5qaln(), m5.m5saln(), nqstr, ntstr, true);
+			normalize_gaps(m5.m5qaln(), m5.m5saln(), nqstr, ntstr, 1);
 			meap_add_one_aln(nqstr, ntstr, m5.m5soff(), cns_table);
 			cns_vec.add_aln(m5.m5soff(), m5.m5send(), nqstr, ntstr);
 		}
@@ -460,7 +460,7 @@ void consensus_one_read_can_pacbio(ConsensusThreadData& ctd, ConsensusPerThreadD
 			if (check_cov_stats(id_list, m5.m5soff(), m5.m5send())) {
 				++num_added;
 				used_ids.insert(ec.qid);
-				normalize_gaps(m5.m5qaln(), m5.m5saln(), nqstr, ntstr, true);
+				normalize_gaps(m5.m5qaln(), m5.m5saln(), nqstr, ntstr, 1);
 				meap_add_one_aln(nqstr, ntstr, m5.m5soff(), cns_table);
 				cns_vec.add_aln(m5.m5soff(), m5.m5send(), nqstr, ntstr);
 			}
@@ -515,7 +515,7 @@ void consensus_one_read_can_nanopore(ConsensusThreadData& ctd, ConsensusPerThrea
 			if (check_cov_stats(id_list, m5.m5soff(), m5.m5send())) {
 				++num_added;
 				used_ids.insert(ec.qid);
-				normalize_gaps(m5.m5qaln(), m5.m5saln(), nqstr, ntstr, true);
+				normalize_gaps(m5.m5qaln(), m5.m5saln(), nqstr, ntstr, 1);
 				meap_add_one_aln(nqstr, ntstr, m5.m5soff(), cns_table);
 				cns_vec.add_aln(m5.m5soff(), m5.m5send(), nqstr, ntstr);
 			}

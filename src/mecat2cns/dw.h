@@ -9,9 +9,8 @@
 #include "../common/defs.h"
 
 struct SW_Parameters {
-	int segment_size;
-	int row_size;
-	int column_size;
+	int segment_size;	// probably best if it's a multiple of 10
+	int row_size, column_size;
 	SW_Parameters(const int i, const int j, const int k) : segment_size(i), row_size(j), column_size(k) { }
 };
 
@@ -22,74 +21,84 @@ inline SW_Parameters get_sw_parameters_small() {
 
 class Alignment {
     public:
-	int dist;
-	int aln_q_s, aln_q_e;
-	int aln_t_s, aln_t_e;
-	std::string q_aln_str;
-	std::string t_aln_str;
+	// size tracks actual buffer use
+	int dist, aln_q_e, aln_t_e, size;
+	// these are buffers we only expand
+	std::vector<char> q_aln_str, t_aln_str;
     public:
 	explicit Alignment() { }
 	~Alignment() { }
-	void clear() {
-		q_aln_str.clear();
-		t_aln_str.clear();
+	void reset(const size_t new_max_size) {
+		size = 0;
+		if (q_aln_str.size() < new_max_size) {
+			q_aln_str.resize(new_max_size);
+			t_aln_str.resize(new_max_size);
+		}
 	}
 };
 
 class OutputStore {
     public:
+	// these track actual buffer use
+	int buffer_start, left_size, right_size;
 	int query_start, query_end;
 	int target_start, target_end;
-	int mat, mis, ins, del;
-	std::string left_store1, left_store2;
-	std::string right_store1, right_store2;
-	std::string out_store1, out_store2;
-	std::string out_match_pattern;
+	// these are buffers that we only expand
+	std::vector<char> q_buffer, t_buffer;
+	// for the record, inserts are q_buffer == 4, deletes are t_buffer == 4;
+	// matches/mismatches are pretty obvious
     public:
 	explicit OutputStore() { }
 	~OutputStore() { }
-	void clear() {
-		left_store1.clear();
-		left_store2.clear();
-		right_store1.clear();
-		right_store2.clear();
-		out_store1.clear();
-		out_store2.clear();
-		out_match_pattern.clear();
+	void reset_buffer(const int i, const size_t new_max_size) {
+		buffer_start = i;
+		left_size = right_size = 0;
+		if (q_buffer.size() < new_max_size) {
+			q_buffer.resize(new_max_size);
+			t_buffer.resize(new_max_size);
+		}
 	}
 };
 
-struct DPathData {
-	int x1, y1, x2, y2, pre_k;
-	explicit DPathData() { }
-	explicit DPathData(const int i, const int j, const int k, const int l, const int m) : x1(i), y1(j), x2(k), y2(l), pre_k(m) { }
-};
-
-struct DPathData2 : public DPathData {
-	int d, k;
+struct DPathData2 {
+	int d, k, x1, y1, x2, y2, pre_k;
 	explicit DPathData2(const int i, const int j) : d(i), k(j) { }
-	explicit DPathData2(const int i, const int j, const int k, const int l, const int m, const int n, const int p) : DPathData(k, l, m, n, p), d(i), k(j) { }
+	explicit DPathData2(const int i, const int j, const int ki, const int l, const int m, const int n, const int p) : d(i), k(j), x1(ki), y1(l), x2(m), y2(n), pre_k(p) { }
+	void set(const int i, const int j, const int ki, const int l, const int m, const int n, const int p) {
+		d = i;
+		k = j;
+		x1 = ki;
+		y1 = l;
+		x2 = m;
+		y2 = n;
+		pre_k = p;
+	}
 };
 
 struct PathPoint {
 	int x, y;
+	explicit PathPoint() { }
 	explicit PathPoint(const int i, const int j) : x(i), y(j) { }
+	void set(const int i, const int j) {
+		x = i;
+		y = j;
+	}
 };
 
 class DiffRunningData {
     public:
-	const SW_Parameters swp;
+	const int segment_size;
 	Alignment align;
 	OutputStore result;
-	std::string query, target;
+	std::vector<char> query, target;
 	std::vector<int> DynQ, DynT;
 	std::vector<DPathData2> d_path;
 	std::vector<PathPoint> aln_path;
     public:
-	explicit DiffRunningData(const SW_Parameters& swp_in) : swp(swp_in) { }
+	explicit DiffRunningData(const SW_Parameters& swp) : segment_size(swp.segment_size), DynQ(swp.row_size), DynT(swp.column_size) { }
 	~DiffRunningData() { }
 };
 
-bool GetAlignment(const std::string& query, int query_start, const std::string& target, int target_start, DiffRunningData& drd, M5Record& m5, double error_rate, int min_aln_size);
+int GetAlignment(const std::string& query, int query_start, const std::string& target, int target_start, DiffRunningData& drd, M5Record& m5, double error_rate, int min_aln_size);
 
 #endif  // DW_H

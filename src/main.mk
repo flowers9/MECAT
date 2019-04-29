@@ -24,3 +24,6 @@ SUBMAKEFILES := mecat2pw/pw.mk \
 		mecat2ref/mecat2ref.mk \
 		mecat2cns/mecat2cns.mk \
 		filter_reads/filter_reads.mk
+
+TGT_CXXFLAGS := -D _FILE_OFFSET_BITS=64 -pg
+TGT_LDFLAGS  := -pg

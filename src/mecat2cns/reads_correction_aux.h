@@ -146,17 +146,17 @@ struct CmpExtensionCandidateCompressedBySidAndScore {
 
 class ConsensusPerThreadData {
     public:
-	// num_candidates, candidates initialized by allocate_ecs()
-	// next_candidate initialized by ConsensusThreadData::restart()
-	idx_t num_candidates, next_candidate;
 	// this is ExtensionCandidate for m4 runs, ExtensionCandidateCompressed
 	// for candidate runs (to reduce memory usage)
 	void* candidates;
-	DiffRunningData drd;	// XXX - reduce memory footprint
-	std::vector<CnsTableItem> cns_table;
-	std::vector<uint1> id_list;
+	// num_candidates, candidates initialized by allocate_ecs()
+	// next_candidate initialized by ConsensusThreadData::restart()
+	idx_t num_candidates, next_candidate;
+	DiffRunningData drd;
 	M5Record m5;
 	CnsAlns cns_alns;
+	std::vector<CnsTableItem> cns_table;
+	std::vector<uint1> id_list;
 	std::vector<CnsResult> cns_results;
 	std::string query, target, qaln, saln;
     public:
@@ -173,14 +173,14 @@ class ConsensusThreadData {
 	ReadsCorrectionOptions& rco;
 	PackedDB& reads;
 	std::ostream& out;
+	ConsensusPerThreadData* data;
 	pthread_mutex_t out_lock;
 	idx_t ec_offset;
 	// this doesn't work as a vector - all the pointers end up pointing
 	// to the same values, and eventually it seg faults (possibly a
 	// compiler optimization bug)
-	ConsensusPerThreadData* data;
     public:
-	ConsensusThreadData(ReadsCorrectionOptions& prco, PackedDB& r, std::ostream& output, const char* const input_file_name) : rco(prco), reads(r), out(output), ec_offset(0), data(new ConsensusPerThreadData[prco.num_threads]), last_thread_id_(-1), num_threads_written_(0) {
+	ConsensusThreadData(ReadsCorrectionOptions& prco, PackedDB& r, std::ostream& output, const char* const input_file_name) : rco(prco), reads(r), out(output), data(new ConsensusPerThreadData[prco.num_threads]), ec_offset(0), last_thread_id_(-1), num_threads_written_(0) {
 		done_file_ = input_file_name;
 		done_file_ += ".done";
 		ckpt_file_ = input_file_name;
@@ -274,12 +274,12 @@ class ConsensusThreadData {
 		}
 	}
     private:
-	int last_thread_id_, num_threads_written_;
 	pthread_mutex_t id_lock_;
+	int last_thread_id_, num_threads_written_;
 	std::string done_file_, ckpt_file_, ckpt_file_tmp_;
 };
 
-void normalize_gaps(const std::string& qstr, const std::string& tstr, std::string& qnorm, std::string& tnorm, bool push);
+void normalize_gaps(const std::string& qstr, const std::string& tstr, std::string& qnorm, std::string& tnorm, int push);
 
 void allocate_ecs(ConsensusThreadData &data, ExtensionCandidate* ec_list, idx_t nec);
 void allocate_ecs(ConsensusThreadData &data, ExtensionCandidateCompressed* ec_list, idx_t nec);

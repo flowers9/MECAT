@@ -1,7 +1,7 @@
 #include "reads_correction_aux.h"
 #include <string>	// string
 
-void normalize_gaps(const std::string& qstr, const std::string& tstr, std::string& qnorm, std::string& tnorm, const bool push)
+void normalize_gaps(const std::string& qstr, const std::string& tstr, std::string& qnorm, std::string& tnorm, const int push)
 {
     qnorm.clear();
     tnorm.clear();
