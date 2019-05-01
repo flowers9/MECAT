@@ -453,7 +453,9 @@ void consensus_one_read_can_pacbio(ConsensusThreadData& ctd, ConsensusPerThreadD
 		const idx_t qsize(reads.read_size(ec.qid));
 		reads.GetSequence(ec.qid, ec.qdir() == FWD, qstr);
 		const idx_t qext(ec.qdir() == FWD ? ec.qext() : qsize - 1 - ec.qext());
+std::cerr << "(" << ec.sid << " " << ec.sext << " " << ssize << ") (" << ec.qid << " " << ec.qext() << " " << qsize << ") " << ec.qdir() << " " << ec.score << "\n";
 		const bool r(GetAlignment(qstr, qext, tstr, ec.sext, drd, m5, 0.15, min_align_size));
+std::cerr << m5.soff << " " << m5.send << " " << m5.qoff << " " << m5.qend << " " << m5.saln.size() << " " << m5.qaln.size() << "\n" << m5.saln << "\n" << m5.qaln << "\n";
 		if (r && check_ovlp_mapping_range(m5.qoff, m5.qend, qsize, m5.soff, m5.send, ssize, min_mapping_ratio)) {
 			if (check_cov_stats(id_list, m5.soff, m5.send)) {
 				++num_added;

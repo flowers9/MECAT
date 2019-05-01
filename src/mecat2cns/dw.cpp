@@ -5,30 +5,28 @@
 #define GAP_ALN 4
 
 static int CompareDPathData2(const void* const a, const void* const b) {
-	const DPathData2* const d1((const DPathData2*)a);
-	const DPathData2* const d2((const DPathData2*)b);
-	return (d1->d != d2->d) ? (d1->d - d2->d) : (d1->k - d2->k);
+	return ((const DPathData2* const)a)->k - ((const DPathData2* const)b)->k;
 }
 
-static void fill_align(const std::string& query, const int q_offset, const std::string& target, const int t_offset, Alignment& align, std::vector<DPathData2>& d_path, const size_t d_path_idx, std::vector<PathPoint>& aln_path, const int extend_forward, const size_t aln_path_max) {
+static void fill_align(const std::string& query, const int q_offset, const std::string& target, const int t_offset, Alignment& align, const std::vector<DPathData2>& d_path, const size_t d_path_idx, const std::vector<size_t>& d_path_index, int d, std::vector<PathPoint>& aln_path, const int extend_forward) {
 	const DPathData2* d_path_aux(&d_path[d_path_idx - 1]);
 	align.aln_q_e = d_path_aux->x2;
 	align.aln_t_e = d_path_aux->y2;
-	if (aln_path.size() < aln_path_max + 2) {
-		aln_path.resize(aln_path_max + 2);
-	}
 	// get align path
+	if (static_cast<int>(aln_path.size()) < (d + 1) * 2) {
+		aln_path.resize((d + 1) * 2);
+	}
 	size_t aln_idx(-1);
 	// no need to search for the first one
 	aln_path[++aln_idx].set(d_path_aux->x2, d_path_aux->y2);
 	aln_path[++aln_idx].set(d_path_aux->x1, d_path_aux->y1);
-	DPathData2 seek(d_path_aux->d - 1, d_path_aux->pre_k);
-	for (; -1 < seek.d && aln_idx < aln_path_max; --seek.d) {
+	DPathData2 seek;
+	for (; d != 0; --d) {
+		seek.k = d_path_aux->pre_k;
 		// there may be a better approach here than bsearch()
-		d_path_aux = (const DPathData2*)bsearch(&seek, &d_path[0], d_path_aux - &d_path[0], sizeof(DPathData2), CompareDPathData2);
+		d_path_aux = (const DPathData2*)bsearch(&seek, &d_path[d_path_index[d - 1]], d_path_index[d] - d_path_index[d - 1], sizeof(DPathData2), CompareDPathData2);
 		aln_path[++aln_idx].set(d_path_aux->x2, d_path_aux->y2);
 		aln_path[++aln_idx].set(d_path_aux->x1, d_path_aux->y1);
-		seek.k = d_path_aux->pre_k;
 	}
 	align.reset(align.aln_q_e + align.aln_t_e);
 	int current_x(aln_path[aln_idx].x);
@@ -76,16 +74,18 @@ static void fill_align(const std::string& query, const int q_offset, const std::
 	}
 }
 
-static int Align(const int segment_size, const std::string& query, const int q_offset, const std::string& target, const int t_offset, Alignment& align, std::vector<int>& V, std::vector<int>& U, std::vector<DPathData2>& d_path, std::vector<PathPoint>& aln_path, const int extend_forward, const double error_rate) {
+static int Align(const int segment_size, const std::string& query, const int q_offset, const std::string& target, const int t_offset, Alignment& align, std::vector<int>& V, std::vector<int>& U, std::vector<DPathData2>& d_path, std::vector<size_t>& d_path_index, std::vector<PathPoint>& aln_path, const int extend_forward, const double error_rate) {
 	const int k_offset(segment_size * 4 * error_rate);
+	if (static_cast<int>(d_path_index.size()) < k_offset) {
+		d_path_index.resize(k_offset);
+	}
 	const int band_tolerance(segment_size / 10 * 3 + 1);
 	// max band size is max offset between query and target
 	const int max_band_size(band_tolerance * 2 - 1);
 	size_t d_path_idx(0);
 	int best_m(-1), min_k(0), max_k(0);
-	// XXX - we could create an index into d_path by d, which would speed up the bsearch() above
-	// (in fact, we wouldn't even have to store d in it anymore)
 	for (int d(0); d < k_offset && max_k - min_k < max_band_size; ++d) {
+		d_path_index[d] = d_path_idx;	// starting point of each "d" set of entries
 		// k is the offset between query and target
 		for (int k(min_k); k <= max_k; k += 2) {
 			int x, pre_k;
@@ -106,14 +106,14 @@ static int Align(const int segment_size, const std::string& query, const int q_o
 				for (; x < segment_size && y < segment_size && query[q_offset - x] == target[t_offset - y]; ++x, ++y) { }
 			}
 			if (d_path_idx != d_path.size()) {
-				d_path[d_path_idx].set(d, k, x1, y1, x, y, pre_k);
+				d_path[d_path_idx].set(k, x1, y1, x, y, pre_k);
 			} else {
-				d_path.push_back(DPathData2(d, k, x1, y1, x, y, pre_k));
+				d_path.push_back(DPathData2(k, x1, y1, x, y, pre_k));
 			}
 			++d_path_idx;
 			// see if we got as much as we can
 			if (x == segment_size || y == segment_size) {
-				fill_align(query, q_offset, target, t_offset, align, d_path, d_path_idx, aln_path, extend_forward, segment_size * 2);
+				fill_align(query, q_offset, target, t_offset, align, d_path, d_path_idx, d_path_index, d, aln_path, extend_forward);
 				return 1;
 			}
 			V[k_offset + k] = x;
@@ -142,7 +142,7 @@ static int Align(const int segment_size, const std::string& query, const int q_o
 	return 0;
 }
 
-static void dw_in_one_direction(const std::string& query, const int q_offset, const std::string& target, const int t_offset, std::vector<int>& U, std::vector<int>& V, Alignment& align, std::vector<DPathData2>& d_path, std::vector<PathPoint>& aln_path, const int segment_size, OutputStore& result, const int extend_forward, const double error_rate) {
+static void dw_in_one_direction(const std::string& query, const int q_offset, const std::string& target, const int t_offset, std::vector<int>& U, std::vector<int>& V, Alignment& align, std::vector<DPathData2>& d_path, std::vector<size_t>& d_path_index, std::vector<PathPoint>& aln_path, const int segment_size, OutputStore& result, const int extend_forward, const double error_rate) {
 	int q_extend(0), t_extend(0), not_at_end(1);
 	const int q_extend_max(extend_forward ? query.size() - q_offset : q_offset);
 	const int t_extend_max(extend_forward ? target.size() - t_offset : t_offset);
@@ -152,10 +152,9 @@ static void dw_in_one_direction(const std::string& query, const int q_offset, co
 		if (extend_size < segment_size + 101) {		// close enough to the end
 			not_at_end = 0;
 		}
-		U.assign(U.size(), 0);	// XXX - are these two initializations necessary?
+		U.assign(U.size(), 0);	// are these two initializations necessary?
 		V.assign(V.size(), 0);
-		if (!Align(not_at_end ? segment_size : extend_size, query, q_offset + (extend_forward ? q_extend : -q_extend), target, t_offset + (extend_forward ? t_extend : -t_extend), align, U, V, d_path, aln_path, extend_forward, error_rate)) {
-			return;
+		if (!Align(not_at_end ? segment_size : extend_size, query, q_offset + (extend_forward ? q_extend : -q_extend), target, t_offset + (extend_forward ? t_extend : -t_extend), align, U, V, d_path, d_path_index, aln_path, extend_forward, error_rate)) { return;
 		}
 		int k;
 		if (not_at_end) {
@@ -233,12 +232,12 @@ static void count_basepairs(const OutputStore& result, int i, const int end_i, i
 	}
 }
 
-static int dw(const std::string& query, const int query_start, const std::string& target, const int target_start, std::vector<int>& U, std::vector<int>& V, Alignment& align, std::vector<DPathData2>& d_path, std::vector<PathPoint>& aln_path, OutputStore& result, const int segment_size, const double error_rate, const int min_aln_size) {
+static int dw(const std::string& query, const int query_start, const std::string& target, const int target_start, std::vector<int>& U, std::vector<int>& V, Alignment& align, std::vector<DPathData2>& d_path, std::vector<size_t>& d_path_index, std::vector<PathPoint>& aln_path, OutputStore& result, const int segment_size, const double error_rate, const int min_aln_size) {
 	result.reset_buffer(query_start + target_start, query.size() + target.size());
 	// reverse extend
-	dw_in_one_direction(query, query_start - 1, target, target_start - 1, U, V, align, d_path, aln_path, segment_size, result, 0, error_rate);
+	dw_in_one_direction(query, query_start - 1, target, target_start - 1, U, V, align, d_path, d_path_index, aln_path, segment_size, result, 0, error_rate);
 	// forward extend
-	dw_in_one_direction(query, query_start, target, target_start, U, V, align, d_path, aln_path, segment_size, result, 1, error_rate);
+	dw_in_one_direction(query, query_start, target, target_start, U, V, align, d_path, d_path_index, aln_path, segment_size, result, 1, error_rate);
 	if (result.left_size + result.right_size < min_aln_size) {
 		return 0;
 	}
@@ -262,7 +261,7 @@ static void decode_sequence(std::string& out_seq, const std::vector<char>& in_se
 
 int GetAlignment(const std::string& query, const int query_start, const std::string& target, const int target_start, DiffRunningData& drd, M5Record& m5, const double error_rate, const int min_aln_size) {
 	OutputStore& result(drd.result);
-	if (!dw(query, query_start, target, target_start, drd.DynQ, drd.DynT, drd.align, drd.d_path, drd.aln_path, result, drd.segment_size, error_rate, min_aln_size)) {
+	if (!dw(query, query_start, target, target_start, drd.DynQ, drd.DynT, drd.align, drd.d_path, drd.d_path_index, drd.aln_path, result, drd.segment_size, error_rate, min_aln_size)) {
 		return 0;
 	}
 	// create return m5 record

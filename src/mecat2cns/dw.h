@@ -58,11 +58,10 @@ class OutputStore {
 };
 
 struct DPathData2 {
-	int d, k, x1, y1, x2, y2, pre_k;
-	explicit DPathData2(const int i, const int j) : d(i), k(j) { }
-	explicit DPathData2(const int i, const int j, const int ki, const int l, const int m, const int n, const int p) : d(i), k(j), x1(ki), y1(l), x2(m), y2(n), pre_k(p) { }
-	void set(const int i, const int j, const int ki, const int l, const int m, const int n, const int p) {
-		d = i;
+	int k, x1, y1, x2, y2, pre_k;
+	explicit DPathData2() { }
+	explicit DPathData2(const int j, const int ki, const int l, const int m, const int n, const int p) : k(j), x1(ki), y1(l), x2(m), y2(n), pre_k(p) { }
+	void set(const int j, const int ki, const int l, const int m, const int n, const int p) {
 		k = j;
 		x1 = ki;
 		y1 = l;
@@ -89,6 +88,7 @@ class DiffRunningData {
 	OutputStore result;
 	std::vector<char> query, target;
 	std::vector<int> DynQ, DynT;
+	std::vector<size_t> d_path_index;
 	std::vector<DPathData2> d_path;
 	std::vector<PathPoint> aln_path;
     public:
