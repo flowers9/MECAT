@@ -1,12 +1,13 @@
 #include "reads_correction_m4.h"
 
-#include <cstring>
+#include <algorithm>	// sort()
 #include <string>	// string
 #include <sstream>
 
 #include "mecat_correction.h"
 #include "overlaps_partition.h"
 #include "overlaps_store.h"
+#include "reads_correction_aux.h"
 
 void* reads_correction_func_m4(void* arg) {
 	ConsensusThreadData& data(*(static_cast<ConsensusThreadData*>(arg)));

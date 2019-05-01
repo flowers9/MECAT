@@ -1,12 +1,9 @@
 #ifndef DW_H
 #define DW_H
 
-#include <algorithm>
 #include <string>	// string
 #include <vector>	// vector<>
-
-#include "../common/alignment.h"
-#include "../common/defs.h"
+#include "../common/defs.h"	// idx_t
 
 struct SW_Parameters {
 	int segment_size;	// probably best if it's a multiple of 10
@@ -22,7 +19,7 @@ inline SW_Parameters get_sw_parameters_small() {
 class Alignment {
     public:
 	// size tracks actual buffer use
-	int dist, aln_q_e, aln_t_e, size;
+	int aln_q_e, aln_t_e, size;
 	// these are buffers we only expand
 	std::vector<char> q_aln_str, t_aln_str;
     public:
@@ -97,6 +94,14 @@ class DiffRunningData {
     public:
 	explicit DiffRunningData(const SW_Parameters& swp) : segment_size(swp.segment_size), DynQ(swp.row_size), DynT(swp.column_size) { }
 	~DiffRunningData() { }
+};
+
+class M5Record {
+    public:
+	idx_t qoff, qend, soff, send;
+	std::string qaln, saln;
+	M5Record() { }
+	~M5Record() { }
 };
 
 int GetAlignment(const std::string& query, int query_start, const std::string& target, int target_start, DiffRunningData& drd, M5Record& m5, double error_rate, int min_aln_size);

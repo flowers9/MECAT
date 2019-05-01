@@ -1,11 +1,10 @@
 #ifndef _READS_CORRECTION_AUX_H
 #define _READS_CORRECTION_AUX_H
 
-#include <vector>
-#include <cstring>
+#include <vector>	// vector<>
 #include <unistd.h>
 
-#include "dw.h"
+#include "dw.h"		// DiffRunningData, M5Record, get_parameters_small()
 #include "packed_db.h"
 #include "options.h"
 
@@ -19,44 +18,40 @@ struct CnsTableItem {
 
 #define MAX_CNS_OVLPS 100
 
-class MappingRange {
-    public:
+struct MappingRange {
 	int start, end;
 	explicit MappingRange() : start(0), end(0) { }
 	explicit MappingRange(const int s, const int e) : start(s), end(e) { }
-	~MappingRange() { }
 };
 
 class CnsAln : public MappingRange {
     public:
-	explicit CnsAln() : aln_idx(0) { }
-	explicit CnsAln(const int i, const int j, const int k, const std::string& q, const std::string& s) : MappingRange(i, j), aln_idx(k), qaln(s), saln(q) { }
+	explicit CnsAln(const int i, const int j, const std::string& q, const std::string& s) : MappingRange(i, j), aln_idx(0), qaln(s), saln(q) { }
 	~CnsAln() { }
-	// don't know why this skips the first basepair
 	int retrieve_aln_subseqs(const int sb, const int se, std::string& qstr, std::string& tstr, int& sb_out) {
-		const int aln_size(static_cast<int>(saln.size()) - 1);
-		if (se <= start || sb >= end || aln_idx >= aln_size) {
+		const int aln_size(saln.size() - 1);
+		if (se <= start || sb >= end || aln_idx == aln_size) {
 			return 0;
 		}
 		sb_out = std::max(start, sb);
-		qstr.clear();
-		tstr.clear();
 		while (start < sb && aln_idx < aln_size) {
-			++aln_idx;
-			if (saln[aln_idx] != GAP) {
+			if (saln[++aln_idx] != GAP) {
 				++start;
 			}
 		}
-		qstr += qaln[aln_idx];
-		tstr += saln[aln_idx];
+		// should we test for start < sb, and return 0 if so,
+		// rather than returning the last basepair of the alignment?
+		const int aln_start(aln_idx);
 		while (start < se && aln_idx < aln_size) {
-			++aln_idx;
-			if (saln[aln_idx] != GAP) {
+			if (saln[++aln_idx] != GAP) {
 				++start;
 			}
-			qstr += qaln[aln_idx];
-			tstr += saln[aln_idx];
 		}
+		// this looks like it could return the same basepair twice -
+		// once at the end of a call, once at the start of the next
+		const int aln_length(aln_idx - aln_start + 1);
+		qstr.assign(qaln, aln_start, aln_length);
+		tstr.assign(saln, aln_start, aln_length);
 		return 1;
 	}
     private:
@@ -82,7 +77,7 @@ class CnsAlns {
 	}
 	void add_aln(const int soff, const int send, const std::string& qstr, const std::string& tstr) {
 		r_assert(qstr.size() == tstr.size());
-		cns_alns_.push_back(CnsAln(soff, send, 0, qstr, tstr));
+		cns_alns_.push_back(CnsAln(soff, send, qstr, tstr));
 	}
 	void get_mapping_ranges(std::vector<MappingRange>& ranges) const {
 		ranges.clear();

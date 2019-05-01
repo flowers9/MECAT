@@ -22,10 +22,9 @@ void PackedDB::add_one_seq(const Sequence& seq) {
 	if (max_db_size < needed_size) {
 		idx_t new_size(max_db_size > 1024 ? max_db_size : 1024);
 		for (; new_size < needed_size; new_size *= 2) { }
-		uint1* new_pac(NULL);
-		safe_calloc(new_pac, uint1, (new_size + 3) / 4);
+		uint1* const new_pac(new uint1[(new_size + 3) / 4]);
 		memcpy(new_pac, pac, (db_size + 3) / 4);
-		safe_free(pac);
+		delete[] pac;
 		pac = new_pac;
 		max_db_size = new_size;
 	}
@@ -182,7 +181,7 @@ void PackedDB::open_db(const std::string& path, const idx_t size) {
 	const idx_t file_size(pstream.tellg());
 	max_db_size = size ? std::min(file_size, size) : file_size;
 	if (max_db_size) {
-		safe_calloc(pac, uint1, max_db_size);
+		pac = new uint1[max_db_size];
 	}
 	size_t read_count;
 	if (!pstream.read((char*)&read_count, sizeof(size_t))) {
@@ -262,7 +261,7 @@ idx_t PackedDB::load_reads(const ExtensionCandidateCompressed* const ec_list, co
 	LOG(stderr, "using %ld bytes for %lu reads, %ld aligns (out of %ld)", total_size, read_ids.size(), i, nec);
 	if (max_db_size == 0) {
 		max_db_size = total_size;
-		safe_calloc(pac, uint1, max_db_size);
+		pac = new uint1[max_db_size];
 	}
 	// now read in the reads
 	std::set<idx_t>::const_iterator a(read_ids.begin());

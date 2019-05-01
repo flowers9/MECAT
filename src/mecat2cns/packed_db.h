@@ -21,7 +21,7 @@ class PackedDB {
 	explicit PackedDB() : pac(0), db_size(0), max_db_size(0) { }
 	~PackedDB() {
 		if (pac) {
-			safe_free(pac);
+			delete[] pac;
 		}
 	}
 	// returns number of reads
@@ -68,7 +68,7 @@ class PackedDB {
 	void add_one_seq(const Sequence& seq);
 	void destroy() {
 		if (pac) {
-			safe_free(pac);
+			delete[] pac;
 			pac = NULL;
 		}
 		seq_idx.clear();

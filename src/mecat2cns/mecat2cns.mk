@@ -20,8 +20,8 @@ SOURCES  := main.cpp \
 
 SRC_INCDIRS  := . libboost
 
-TGT_CXXFLAGS := -D _FILE_OFFSET_BITS=64 -pg
-TGT_LDFLAGS  := -L${TARGET_DIR} -pg
+TGT_CXXFLAGS := -D _FILE_OFFSET_BITS=64 -pg -g
+TGT_LDFLAGS  := -L${TARGET_DIR} -pg -g
 TGT_LDLIBS   := -lmecat
 TGT_PREREQS  := libmecat.a
 
