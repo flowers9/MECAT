@@ -1,6 +1,7 @@
 #ifndef DW_H
 #define DW_H
 
+#include <deque>	// deque<>
 #include <string>	// string
 #include <vector>	// vector<>
 #include "../common/defs.h"	// idx_t
@@ -98,7 +99,7 @@ class DiffRunningData {
 	std::vector<DPathIndex> d_path_index;
 	// maybe make d_path a deque rather than a vector, for growth
 	// speed and (likely) reduced memory waste?
-	std::vector<DPathData> d_path;
+	std::deque<DPathData> d_path;
 	std::vector<PathPoint> aln_path;
     public:
 	explicit DiffRunningData(const SW_Parameters& swp) : segment_size(swp.segment_size), DynQ(swp.row_size), DynT(swp.column_size) { }

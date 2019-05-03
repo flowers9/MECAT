@@ -15,7 +15,7 @@
 #include <cstring>
 #include <unistd.h>	// unlink()
 
-#define RM 		100000
+#define RM 		500000
 #define DN 		500
 #define BC 		10
 #define SM 		40

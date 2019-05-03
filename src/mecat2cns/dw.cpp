@@ -1,10 +1,11 @@
 #include "dw.h"
 #include <algorithm>	// copy(), fill()
+#include <deque>	// deque<>
 #include <vector>	// vector<>
 
 #define GAP_ALN 4
 
-static void fill_align(const std::string& query, const int q_offset, const std::string& target, const int t_offset, Alignment& align, const std::vector<DPathData>& d_path, const DPathData* d_path_aux, const std::vector<DPathIndex>& d_path_index, int d, std::vector<PathPoint>& aln_path, const int extend_forward) {
+static void fill_align(const std::string& query, const int q_offset, const std::string& target, const int t_offset, Alignment& align, const std::deque<DPathData>& d_path, const DPathData* d_path_aux, const std::vector<DPathIndex>& d_path_index, int d, std::vector<PathPoint>& aln_path, const int extend_forward) {
 	align.aln_q_e = d_path_aux->x2;
 	align.aln_t_e = d_path_aux->y2;
 	// get align path
@@ -66,7 +67,7 @@ static void fill_align(const std::string& query, const int q_offset, const std::
 	}
 }
 
-static int Align(const int segment_size, const std::string& query, const int q_offset, const std::string& target, const int t_offset, Alignment& align, std::vector<int>& V, std::vector<int>& U, std::vector<DPathData>& d_path, std::vector<DPathIndex>& d_path_index, std::vector<PathPoint>& aln_path, const int extend_forward, const double error_rate) {
+static int Align(const int segment_size, const std::string& query, const int q_offset, const std::string& target, const int t_offset, Alignment& align, std::vector<int>& V, std::vector<int>& U, std::deque<DPathData>& d_path, std::vector<DPathIndex>& d_path_index, std::vector<PathPoint>& aln_path, const int extend_forward, const double error_rate) {
 	U.assign(U.size(), 0);
 	V.assign(V.size(), 0);
 	const int k_offset(segment_size * 4 * error_rate);
@@ -137,7 +138,7 @@ static int Align(const int segment_size, const std::string& query, const int q_o
 	return 0;
 }
 
-static void dw_in_one_direction(const std::string& query, const int q_offset, const std::string& target, const int t_offset, std::vector<int>& U, std::vector<int>& V, Alignment& align, std::vector<DPathData>& d_path, std::vector<DPathIndex>& d_path_index, std::vector<PathPoint>& aln_path, const int segment_size, OutputStore& result, const int extend_forward, const double error_rate) {
+static void dw_in_one_direction(const std::string& query, const int q_offset, const std::string& target, const int t_offset, std::vector<int>& U, std::vector<int>& V, Alignment& align, std::deque<DPathData>& d_path, std::vector<DPathIndex>& d_path_index, std::vector<PathPoint>& aln_path, const int segment_size, OutputStore& result, const int extend_forward, const double error_rate) {
 	const int q_extend_max(extend_forward ? query.size() - q_offset : q_offset + 1);
 	const int t_extend_max(extend_forward ? target.size() - t_offset : t_offset + 1);
 	// amount we've already extended
@@ -231,7 +232,7 @@ static int gap_count(const std::vector<char>& buffer, int i, const int end_i) {
 	return j;
 }
 
-static int dw(const std::string& query, const int query_start, const std::string& target, const int target_start, std::vector<int>& U, std::vector<int>& V, Alignment& align, std::vector<DPathData>& d_path, std::vector<DPathIndex>& d_path_index, std::vector<PathPoint>& aln_path, OutputStore& result, const int segment_size, const double error_rate, const int min_aln_size) {
+static int dw(const std::string& query, const int query_start, const std::string& target, const int target_start, std::vector<int>& U, std::vector<int>& V, Alignment& align, std::deque<DPathData>& d_path, std::vector<DPathIndex>& d_path_index, std::vector<PathPoint>& aln_path, OutputStore& result, const int segment_size, const double error_rate, const int min_aln_size) {
 	result.reset_buffer(query_start + target_start, query.size() + target.size());
 	// reverse extend (left side)
 	dw_in_one_direction(query, query_start - 1, target, target_start - 1, U, V, align, d_path, d_path_index, aln_path, segment_size, result, 0, error_rate);
