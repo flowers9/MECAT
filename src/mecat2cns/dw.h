@@ -57,24 +57,31 @@ class OutputStore {
 	}
 };
 
-struct DPathData2 {
-	int k, x1, y1, x2, y2, pre_k;
-	explicit DPathData2() { }
-	explicit DPathData2(const int j, const int ki, const int l, const int m, const int n, const int p) : k(j), x1(ki), y1(l), x2(m), y2(n), pre_k(p) { }
-	void set(const int j, const int ki, const int l, const int m, const int n, const int p) {
-		k = j;
-		x1 = ki;
-		y1 = l;
-		x2 = m;
-		y2 = n;
-		pre_k = p;
+struct DPathData {
+	int x1, y1, x2, y2, pre_k;
+	explicit DPathData() { }
+	explicit DPathData(const int i, const int j, const int k, const int l, const int m) : x1(i), y1(j), x2(k), y2(l), pre_k(m) { }
+	void set(const int i, const int j, const int k, const int l, const int m) {
+		x1 = i;
+		y1 = j;
+		x2 = k;
+		y2 = l;
+		pre_k = m;
+	}
+};
+
+struct DPathIndex {
+	int d_offset, min_k;
+	explicit DPathIndex() { }
+	void set(const int i, const int j) {
+		d_offset = i;
+		min_k = j;
 	}
 };
 
 struct PathPoint {
 	int x, y;
 	explicit PathPoint() { }
-	explicit PathPoint(const int i, const int j) : x(i), y(j) { }
 	void set(const int i, const int j) {
 		x = i;
 		y = j;
@@ -88,10 +95,10 @@ class DiffRunningData {
 	OutputStore result;
 	std::vector<char> query, target;
 	std::vector<int> DynQ, DynT;
-	std::vector<size_t> d_path_index;
+	std::vector<DPathIndex> d_path_index;
 	// maybe make d_path a deque rather than a vector, for growth
 	// speed and (likely) reduced memory waste?
-	std::vector<DPathData2> d_path;
+	std::vector<DPathData> d_path;
 	std::vector<PathPoint> aln_path;
     public:
 	explicit DiffRunningData(const SW_Parameters& swp) : segment_size(swp.segment_size), DynQ(swp.row_size), DynT(swp.column_size) { }

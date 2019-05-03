@@ -33,8 +33,7 @@ static void grid_start(const char* const prog, const ReadsCorrectionOptions &opt
 	unlink(script_file.c_str());
         std::ofstream out;
         open_fstream(out, script_file.c_str(), std::ios::out);
-        //out << "#!/bin/bash\nulimit -c 0\n" << prog << make_options(new_options) << "\n";
-        out << "#!/bin/bash\n" << prog << make_options(new_options) << "\n";
+        out << "#!/bin/bash\nulimit -c 0\n" << prog << make_options(new_options) << "\n";
 	if (!out) {
 		std::cerr << "Error writing to " << script_file << "\n";
 		exit(1);
