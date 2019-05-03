@@ -89,6 +89,8 @@ class DiffRunningData {
 	std::vector<char> query, target;
 	std::vector<int> DynQ, DynT;
 	std::vector<size_t> d_path_index;
+	// maybe make d_path a deque rather than a vector, for growth
+	// speed and (likely) reduced memory waste?
 	std::vector<DPathData2> d_path;
 	std::vector<PathPoint> aln_path;
     public:

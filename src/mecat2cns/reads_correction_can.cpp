@@ -14,7 +14,7 @@ static void* reads_correction_func_can(void* const arg) {
 	ConsensusThreadData& data(*(static_cast<ConsensusThreadData*>(arg)));
 	const int tid(data.get_thread_id());
 	ConsensusPerThreadData& pdata(data.data[tid]);
-	const ExtensionCandidateCompressed* const candidates((ExtensionCandidateCompressed*)pdata.candidates);
+	const ExtensionCandidateCompressed* const candidates((const ExtensionCandidateCompressed*)pdata.candidates);
 	idx_t i(pdata.next_candidate);
 	if (data.rco.tech == TECH_PACBIO) {
 		while (i != pdata.num_candidates) {
