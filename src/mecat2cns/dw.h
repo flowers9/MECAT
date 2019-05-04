@@ -1,20 +1,19 @@
 #ifndef DW_H
 #define DW_H
 
-#include <deque>	// deque<>
 #include <string>	// string
 #include <vector>	// vector<>
 #include "../common/defs.h"	// idx_t
 
 struct SW_Parameters {
 	int segment_size;	// probably best if it's a multiple of 10
-	int row_size, column_size;
-	SW_Parameters(const int i, const int j, const int k) : segment_size(i), row_size(j), column_size(k) { }
+	int row_size, column_size, d_path_size;
+	SW_Parameters(const int i, const int j, const int k, const int l) : segment_size(i), row_size(j), column_size(k), d_path_size(l) { }
 };
 
 inline SW_Parameters get_sw_parameters_small() {
 	// 1000 instead of 500 for "large"
-	return SW_Parameters(500, 4096, 4096);
+	return SW_Parameters(500, 4096, 4096, 500000);
 }
 
 class Alignment {
@@ -25,13 +24,13 @@ class Alignment {
 	std::vector<char> q_aln_str, t_aln_str;
     public:
 	explicit Alignment() { }
+	explicit Alignment(const size_t new_max_size) {
+		q_aln_str.resize(new_max_size);
+		t_aln_str.resize(new_max_size);
+	}
 	~Alignment() { }
-	void reset(const size_t new_max_size) {
+	void reset() {
 		size = 0;
-		if (q_aln_str.size() < new_max_size) {
-			q_aln_str.resize(new_max_size);
-			t_aln_str.resize(new_max_size);
-		}
 	}
 };
 
@@ -47,14 +46,14 @@ class OutputStore {
 	// matches/mismatches are pretty obvious
     public:
 	explicit OutputStore() { }
+	explicit OutputStore(const size_t new_max_size) {
+		q_buffer.resize(new_max_size);
+		t_buffer.resize(new_max_size);
+	}
 	~OutputStore() { }
-	void reset_buffer(const int i, const size_t new_max_size) {
+	void reset_buffer(const int i) {
 		buffer_start = i;
 		left_size = right_size = 0;
-		if (q_buffer.size() < new_max_size) {
-			q_buffer.resize(new_max_size);
-			t_buffer.resize(new_max_size);
-		}
 	}
 };
 
@@ -94,15 +93,13 @@ class DiffRunningData {
 	const int segment_size;
 	Alignment align;
 	OutputStore result;
-	std::vector<char> query, target;
 	std::vector<int> DynQ, DynT;
+	std::vector<DPathData> d_path;
 	std::vector<DPathIndex> d_path_index;
-	// maybe make d_path a deque rather than a vector, for growth
-	// speed and (likely) reduced memory waste?
-	std::deque<DPathData> d_path;
 	std::vector<PathPoint> aln_path;
     public:
-	explicit DiffRunningData(const SW_Parameters& swp) : segment_size(swp.segment_size), DynQ(swp.row_size), DynT(swp.column_size) { }
+	// work on more accurate sizing of these buffers
+	explicit DiffRunningData(const SW_Parameters& swp) : segment_size(swp.segment_size), align((swp.segment_size + 100) * 2), result(MAX_SEQ_SIZE * 2), DynQ(swp.row_size), DynT(swp.column_size), d_path(swp.d_path_size), d_path_index(swp.segment_size * 2), aln_path(swp.segment_size * 4) { }
 	~DiffRunningData() { }
 };
 

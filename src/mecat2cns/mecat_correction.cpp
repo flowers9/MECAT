@@ -73,7 +73,7 @@ static void meap_cns_one_indel(const int sb, const int se, CnsAlns& cns_vec, con
 }
 
 static void meap_consensus_one_segment(const std::vector<CnsTableItem>& cns_list, const int cns_list_size, std::vector<uint1>& cns_id_vec, const int start_soff, CnsAlns& cns_vec, std::string& aux_qstr, std::string& aux_tstr, std::string& target) {
-	if (static_cast<int>(cns_id_vec.size()) < cns_list_size) {
+	if (cns_id_vec.size() < static_cast<size_t>(cns_list_size)) {
 		cns_id_vec.resize(cns_list_size);
 	}
 	// get types of coverage
@@ -400,7 +400,7 @@ consensus_one_read_m4_nanopore(ConsensusThreadData& ctd, ConsensusPerThreadData 
 // once coverage gets high enough, stop adding coverage and return false
 
 static inline int check_cov_stats(std::vector<uint1>& cov_stats, const int soff, const int send) {
-	if (static_cast<int>(cov_stats.size()) < send) {
+	if (cov_stats.size() < static_cast<size_t>(send)) {
 		cov_stats.resize(send, 0);
 	}
 	int n(0);
