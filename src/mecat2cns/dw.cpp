@@ -63,11 +63,11 @@ static void fill_align(const std::string& query, const int q_offset, const std::
 	}
 }
 
-static int Align(const int segment_size, const std::string& query, const int q_offset, const std::string& target, const int t_offset, Alignment& align, std::vector<int>& V, std::vector<int>& U, std::vector<DPathData>& d_path, std::vector<DPathIndex>& d_path_index, std::vector<PathPoint>& aln_path, const int extend_forward, const double error_rate) {
-	U.assign(U.size(), 0);
-	V.assign(V.size(), 0);
-	const int k_offset(segment_size * 4 * error_rate);
-	const int band_tolerance(segment_size / 10 * 3 + 1);
+static int Align(const int extend_size, const std::string& query, const int q_offset, const std::string& target, const int t_offset, Alignment& align, std::vector<int>& V, std::vector<int>& U, std::vector<DPathData>& d_path, std::vector<DPathIndex>& d_path_index, std::vector<PathPoint>& aln_path, const int extend_forward, const double error_rate) {
+	const int k_offset(extend_size * 4 * error_rate);
+	U.assign(k_offset * 2, 0);
+	V.assign(k_offset * 2, 0);
+	const int band_tolerance(extend_size / 10 * 3 + 1);
 	const int max_band_size(band_tolerance * 2 - 1);
 	int d_path_idx(0), best_m(-1), min_k(0), max_k(0);
 	for (int d(0); d < k_offset && max_k - min_k < max_band_size; ++d) {
@@ -88,13 +88,13 @@ static int Align(const int segment_size, const std::string& query, const int q_o
 			const int x1(x), y1(y);
 			// find the other end of exact match
 			if (extend_forward) {
-				for (; x < segment_size && y < segment_size && query[q_offset + x] == target[t_offset + y]; ++x, ++y) { }
+				for (; x < extend_size && y < extend_size && query[q_offset + x] == target[t_offset + y]; ++x, ++y) { }
 			} else {
-				for (; x < segment_size && y < segment_size && query[q_offset - x] == target[t_offset - y]; ++x, ++y) { }
+				for (; x < extend_size && y < extend_size && query[q_offset - x] == target[t_offset - y]; ++x, ++y) { }
 			}
 			d_path[d_path_idx].set(x1, y1, x, y, pre_k);
 			// see if we got as much as we can
-			if (x == segment_size || y == segment_size) {
+			if (x == extend_size || y == extend_size) {
 				fill_align(query, q_offset, target, t_offset, align, d_path, &d_path[d_path_idx], d_path_index, d, aln_path, extend_forward);
 				return 1;
 			}
@@ -133,7 +133,7 @@ static void dw_in_one_direction(const std::string& query, const int q_offset, co
 	do {
 		// size left to extend
 		const int extend_size(std::min(q_extend_max - q_extend, t_extend_max - t_extend));
-		if (extend_size < segment_size + 101) {		// close enough to the end
+		if (extend_size <= segment_size + SEGMENT_BORDER) { // close enough to the end
 			not_at_end = 0;
 		}
 		if (!Align(not_at_end ? segment_size : extend_size, query, q_offset + (extend_forward ? q_extend : -q_extend), target, t_offset + (extend_forward ? t_extend : -t_extend), align, U, V, d_path, d_path_index, aln_path, extend_forward, error_rate)) {

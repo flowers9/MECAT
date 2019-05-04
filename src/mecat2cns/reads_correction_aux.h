@@ -4,7 +4,7 @@
 #include <vector>	// vector<>
 #include <unistd.h>
 
-#include "dw.h"		// DiffRunningData, M5Record, get_parameters_small()
+#include "dw.h"		// DiffRunningData, M5Record
 #include "packed_db.h"
 #include "options.h"
 
@@ -155,12 +155,15 @@ class ConsensusPerThreadData {
 	std::vector<CnsResult> cns_results;
 	std::string query, target, qaln, saln;
     public:
-	ConsensusPerThreadData() : drd(DiffRunningData(get_sw_parameters_small())) {
+	ConsensusPerThreadData() {
 		// we'll definitely be seeing at least this much use,
 		// so might as well preallocate
 		cns_results.reserve(MAX_CNS_RESULTS);
 	}
 	~ConsensusPerThreadData() { }
+	void set_size(const idx_t max_read_size) {
+		drd.set_size(max_read_size);
+	}
 };
 
 class ConsensusThreadData {
@@ -183,6 +186,10 @@ class ConsensusThreadData {
 		ckpt_file_tmp_ = ckpt_file_ + ".tmp";
 		pthread_mutex_init(&out_lock, NULL);
 		pthread_mutex_init(&id_lock_, NULL);
+		const idx_t max_read_size(reads.max_read_size());
+		for (int i(0); i != rco.num_threads; ++i) {
+			data[i].set_size(max_read_size);
+		}
 	}
 	~ConsensusThreadData() {
 		delete[] data;

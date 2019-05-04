@@ -20,9 +20,7 @@ class PackedDB {
     public:
 	explicit PackedDB() : pac(0), db_size(0), max_db_size(0) { }
 	~PackedDB() {
-		if (pac) {
-			delete[] pac;
-		}
+		delete[] pac;
 	}
 	// returns number of reads
 	static size_t convert_fasta_to_db(const std::string& fasta, const std::string& output_prefix, idx_t min_size);
@@ -54,6 +52,20 @@ class PackedDB {
 	idx_t read_size(const idx_t read_id) const {
 		return seq_idx[read_id].size;
 	}
+	idx_t max_read_size() const {
+		if (seq_idx.empty()) {
+			return 0;
+		}
+		std::vector<SeqIndex>::const_iterator a(seq_idx.begin());
+		const std::vector<SeqIndex>::const_iterator end_a(seq_idx.end());
+		idx_t max_size(a->size);
+		for (++a; a != end_a; ++a) {
+			if (max_size < a->size) {
+				max_size = a->size;
+			}
+		}
+		return max_size;
+	}
     private:
 	static void set_char(std::vector<uint1>& p, const idx_t idx, const u1_t c) {
 		p[idx >> 2] |= c << ((~idx & 3) << 1);
@@ -67,10 +79,7 @@ class PackedDB {
 	}
 	void add_one_seq(const Sequence& seq);
 	void destroy() {
-		if (pac) {
-			delete[] pac;
-			pac = NULL;
-		}
+		delete[] pac;
 		seq_idx.clear();
 		max_db_size = db_size = 0;
 	}
@@ -78,7 +87,7 @@ class PackedDB {
 	u1_t* pac;
 	idx_t db_size;
 	idx_t max_db_size;
-	PODArray<SeqIndex> seq_idx;
+	std::vector<SeqIndex> seq_idx;
 	std::ifstream pstream;
 };
 

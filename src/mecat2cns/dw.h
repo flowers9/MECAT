@@ -5,25 +5,12 @@
 #include <vector>	// vector<>
 #include "../common/defs.h"	// idx_t
 
-struct SW_Parameters {
-	int segment_size;	// probably best if it's a multiple of 10
-	int row_size, column_size, d_path_size;
-	SW_Parameters(const int i, const int j, const int k, const int l) : segment_size(i), row_size(j), column_size(k), d_path_size(l) { }
-};
-
-inline SW_Parameters get_sw_parameters_small() {
-	// 1000 instead of 500 for "large"
-	return SW_Parameters(500, 4096, 4096, 500000);
-}
-
 class Alignment {
     public:
 	// size tracks actual buffer use
 	int aln_q_e, aln_t_e, size;
-	// these are buffers we only expand
 	std::vector<char> q_aln_str, t_aln_str;
     public:
-	explicit Alignment() { }
 	explicit Alignment(const size_t new_max_size) {
 		q_aln_str.resize(new_max_size);
 		t_aln_str.resize(new_max_size);
@@ -36,21 +23,20 @@ class Alignment {
 
 class OutputStore {
     public:
-	// these track actual buffer use
+	// these track actual buffer use - buffer use starts at
+	// buffer_start, with left going down, and right going up
 	int buffer_start, left_size, right_size;
 	int query_start, query_end;
 	int target_start, target_end;
-	// these are buffers that we only expand
 	std::vector<char> q_buffer, t_buffer;
-	// for the record, inserts are q_buffer == 4, deletes are t_buffer == 4;
-	// matches/mismatches are pretty obvious
     public:
 	explicit OutputStore() { }
-	explicit OutputStore(const size_t new_max_size) {
+	~OutputStore() { }
+	// can't figure out how to pass this in on initialization
+	void resize(const size_t new_max_size) {
 		q_buffer.resize(new_max_size);
 		t_buffer.resize(new_max_size);
 	}
-	~OutputStore() { }
 	void reset_buffer(const int i) {
 		buffer_start = i;
 		left_size = right_size = 0;
@@ -88,19 +74,27 @@ struct PathPoint {
 	}
 };
 
+// if the end of query/target is within this or less, extend the whole distance
+#define SEGMENT_BORDER 100
+
 class DiffRunningData {
     public:
-	const int segment_size;
-	Alignment align;
-	OutputStore result;
-	std::vector<int> DynQ, DynT;
-	std::vector<DPathData> d_path;
-	std::vector<DPathIndex> d_path_index;
-	std::vector<PathPoint> aln_path;
+	const int segment_size;		// 500 is "small", 1000 is "large"
+	// in Align(), k_offset = extend_size * 4 * error_rate; error_rate is .15 or .2,
+	// extend_size can be as high as segment_size + SEGMENT_BORDER
+	Alignment align;			// can be twice k_offset
+	OutputStore result;			// can be twice max read size
+	std::vector<int> DynQ, DynT;		// can be twice k_offset
+	std::vector<DPathData> d_path;		// can be 1/2 k_offset^2
+	std::vector<DPathIndex> d_path_index;	// can be k_offset
+	std::vector<PathPoint> aln_path;	// can be twice k_offset
     public:
-	// work on more accurate sizing of these buffers
-	explicit DiffRunningData(const SW_Parameters& swp) : segment_size(swp.segment_size), align((swp.segment_size + 100) * 2), result(MAX_SEQ_SIZE * 2), DynQ(swp.row_size), DynT(swp.column_size), d_path(swp.d_path_size), d_path_index(swp.segment_size * 2), aln_path(swp.segment_size * 4) { }
+	explicit DiffRunningData() : segment_size(500), align((segment_size + SEGMENT_BORDER) * 2), DynQ((segment_size + SEGMENT_BORDER) * 2), DynT((segment_size + SEGMENT_BORDER) * 2), d_path((segment_size + SEGMENT_BORDER) * (segment_size + SEGMENT_BORDER) / 2), d_path_index(segment_size + SEGMENT_BORDER), aln_path((segment_size + SEGMENT_BORDER) * 2) { }
 	~DiffRunningData() { }
+	// can't figure out how to pass this in on initialization, short of a global
+	void set_size(const idx_t max_read_size) {
+		result.resize(max_read_size * 2);
+	}
 };
 
 class M5Record {
