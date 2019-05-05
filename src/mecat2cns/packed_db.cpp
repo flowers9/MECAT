@@ -13,12 +13,11 @@
 #include "../common/alignment.h"
 
 void PackedDB::add_one_seq(const Sequence& seq) {
-	SeqIndex si;
-	si.file_offset = -1;
-	si.memory_offset = db_size;
-	si.size = seq.size();
-	seq_idx.push_back(si);
-	const idx_t needed_size(db_size + si.size);
+	seq_idx.push_back(SeqIndex(-1, db_size, seq.size()));
+	if (max_read_size_ < seq.size()) {
+		max_read_size_ = seq.size();
+	}
+	const idx_t needed_size(db_size + seq.size());
 	if (max_db_size < needed_size) {
 		idx_t new_size(max_db_size > 1024 ? max_db_size : 1024);
 		for (; new_size < needed_size; new_size *= 2) { }
@@ -31,7 +30,7 @@ void PackedDB::add_one_seq(const Sequence& seq) {
 	const Sequence::str_t& org_seq(seq.sequence());
 	const uint1* const table(get_dna_encode_table());
 	unsigned int rand_char(0);	// spread out unknown sequence in a repeatable fashion
-	for (idx_t i(0); i < si.size; ++i, ++db_size) {
+	for (idx_t i(0); i < seq.size(); ++i, ++db_size) {
 		const uint1 c(table[static_cast<int>(org_seq[i])]);
 		set_char(db_size, c < 4 ? c : ++rand_char & 3);
 	}
@@ -200,6 +199,9 @@ void PackedDB::open_db(const std::string& path, const idx_t size) {
 		while (index >> si.file_offset >> si.size) {
 			si.memory_offset = si.file_offset * 4;
 			seq_idx.push_back(si);
+			if (max_read_size_ < si.size) {
+				max_read_size_ = si.size;
+			}
 		}
 		close_fstream(index);
 		if (!pstream.read((char*)pac, max_db_size)) {
@@ -210,6 +212,9 @@ void PackedDB::open_db(const std::string& path, const idx_t size) {
 		si.memory_offset = -1;
 		while (index >> si.file_offset >> si.size) {
 			seq_idx.push_back(si);
+			if (max_read_size_ < si.size) {
+				max_read_size_ = si.size;
+			}
 		}
 		close_fstream(index);
 	}

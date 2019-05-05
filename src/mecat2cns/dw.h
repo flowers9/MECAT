@@ -77,9 +77,12 @@ struct PathPoint {
 // if the end of query/target is within this or less, extend the whole distance
 #define SEGMENT_BORDER 100
 
+// use static sizing here rather than dynamic, as dynamic is 50% slower in practice;
+// that said, reserving the space instead of initializing it may be viable
+
 class DiffRunningData {
     public:
-	const int segment_size;		// 500 is "small", 1000 is "large"
+	const int segment_size;			// 500 is "small", 1000 is "large"
 	// in Align(), k_offset = extend_size * 4 * error_rate; error_rate is .15 or .2,
 	// extend_size can be as high as segment_size + SEGMENT_BORDER
 	Alignment align;			// can be twice k_offset
@@ -89,7 +92,7 @@ class DiffRunningData {
 	std::vector<DPathIndex> d_path_index;	// can be k_offset
 	std::vector<PathPoint> aln_path;	// can be twice k_offset
     public:
-	explicit DiffRunningData() : segment_size(500), align((segment_size + SEGMENT_BORDER) * 2), DynQ((segment_size + SEGMENT_BORDER) * 2), DynT((segment_size + SEGMENT_BORDER) * 2), d_path((segment_size + SEGMENT_BORDER) * (segment_size + SEGMENT_BORDER) / 2), d_path_index(segment_size + SEGMENT_BORDER), aln_path((segment_size + SEGMENT_BORDER) * 2) { }
+	explicit DiffRunningData() : segment_size(500), align((segment_size + SEGMENT_BORDER) * 2), DynQ((segment_size + SEGMENT_BORDER) * 2), DynT((segment_size + SEGMENT_BORDER) * 2), d_path((segment_size + SEGMENT_BORDER) * (segment_size + SEGMENT_BORDER + 1) / 2), d_path_index(segment_size + SEGMENT_BORDER), aln_path((segment_size + SEGMENT_BORDER) * 2) { }
 	~DiffRunningData() { }
 	// can't figure out how to pass this in on initialization, short of a global
 	void set_size(const idx_t max_read_size) {

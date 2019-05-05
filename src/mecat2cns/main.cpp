@@ -5,15 +5,17 @@
 #include "packed_db.h"			// PackedDB
 
 #include <fcntl.h>	// S_IRUSR, S_IXUSR
-#include <list>
-#include <sstream>
+#include <list>		// list<>
+#include <sstream>	// ostringstream
 #include <string>	// string
 #include <sys/stat.h>	// chmod()
 #include <unistd.h>	// ... unlink()
 #include <utility>	// pair<>
-#include <vector>
+#include <vector>	// vector<>
 
-static void grid_start(const char* const prog, const ReadsCorrectionOptions &options, const int i) {
+static void grid_start(const char* const prog, const ReadsCorrectionOptions &options, const int i, const std::string& exit_file) {
+	// make sure exit marker is not present
+	unlink(exit_file.c_str());
         // create grid script, have grid run it
 	ReadsCorrectionOptions new_options(options);
 	new_options.job_index = i;
@@ -33,7 +35,7 @@ static void grid_start(const char* const prog, const ReadsCorrectionOptions &opt
 	unlink(script_file.c_str());
         std::ofstream out;
         open_fstream(out, script_file.c_str(), std::ios::out);
-        out << "#!/bin/bash\nulimit -c 0\n" << prog << make_options(new_options) << "\n";
+        out << "#!/bin/bash\nset -e\ntrap 'touch " << exit_file << "' EXIT\nulimit -c 0\n" << prog << make_options(new_options) << "\n";
 	if (!out) {
 		std::cerr << "Error writing to " << script_file << "\n";
 		exit(1);
@@ -45,16 +47,21 @@ static void grid_start(const char* const prog, const ReadsCorrectionOptions &opt
 	assert(system(cmd.c_str()) == 0);
 }
 
-// pass by value so we can modify list to easily avoid checking previously
-// found results files
-static void wait_for_files(std::list<std::string> results) {
-	const std::list<std::string>::const_iterator end_a(results.end());
-	while (!results.empty()) {
+// exit files get modified during loop
+
+static void wait_for_files(std::list<std::string>& exit_files) {
+	const std::list<std::string>::const_iterator end_a(exit_files.end());
+	while (!exit_files.empty()) {
 		sleep(60);
-		std::list<std::string>::iterator a(results.begin());
+		std::list<std::string>::iterator a(exit_files.begin());
 		while (a != end_a) {
 			if (access(a->c_str(), F_OK) == 0) {
-				a = results.erase(a);
+				// now test to see if it worked, by removed ".exit" from end
+				a->resize(a->size() - 5);
+				if (access(a->c_str(), F_OK) != 0) {	// failed!
+					ERROR("Failed: %s does not exist", a->c_str());
+				}
+				a = exit_files.erase(a);
 			} else {
 				++a;
 			}
@@ -101,9 +108,9 @@ int main(int argc, char** argv) {
 			return 0;
 		} else if (access("partition.done", F_OK) == 0) {	// split already done
 		} else if (rco.grid_options || rco.grid_options_split) {
-			grid_start(argv[0], rco, -1);
+			grid_start(argv[0], rco, -1, "partition.done.exit");
 			std::list<std::string> partition_results;
-			partition_results.push_back("partition.done");
+			partition_results.push_back("partition.done.exit");
 			wait_for_files(partition_results);
 		} else {
 			if (rco.input_type == INPUT_TYPE_CAN) {
@@ -135,19 +142,22 @@ int main(int argc, char** argv) {
 		generate_partition_index_file_name(rco.m4, idx_file_name);
 		std::vector<std::string> partition_file_vec;
 		load_partition_files_info(idx_file_name.c_str(), partition_file_vec);
-		std::list<std::string> results;
+		std::list<std::string> exit_files, results;
 		for (size_t i(0); i != partition_file_vec.size(); ++i) {
 			std::ostringstream os;
 			os << rco.corrected_reads << "." << i;
-			results.push_back(os.str());
+			const std::string done_file(os.str());
+			const std::string exit_file(os.str() + ".exit");
+			results.push_back(done_file);
+			exit_files.push_back(exit_file);
 			if (access(os.str().c_str(), F_OK) != 0) {
-				grid_start(argv[0], rco, i);
+				grid_start(argv[0], rco, i, exit_file);
 				if (rco.grid_start_delay) {
 					sleep(rco.grid_start_delay);
 				}
 			}
 		}
-		wait_for_files(results);
+		wait_for_files(exit_files);
 		merge_results(rco.corrected_reads, results);
 	}
 	return 0;
