@@ -1,9 +1,10 @@
 #ifndef DW_H
 #define DW_H
 
+#include "../common/defs.h"	// idx_t
+#include <math.h>	// ceil()
 #include <string>	// string
 #include <vector>	// vector<>
-#include "../common/defs.h"	// idx_t
 
 class Alignment {
     public:
@@ -11,11 +12,12 @@ class Alignment {
 	int aln_q_e, aln_t_e, size;
 	std::vector<char> q_aln_str, t_aln_str;
     public:
-	explicit Alignment(const size_t new_max_size) {
+	explicit Alignment() { }
+	~Alignment() { }
+	void resize(const size_t new_max_size) {
 		q_aln_str.resize(new_max_size);
 		t_aln_str.resize(new_max_size);
 	}
-	~Alignment() { }
 	void reset() {
 		size = 0;
 	}
@@ -83,7 +85,7 @@ struct PathPoint {
 class DiffRunningData {
     public:
 	const int segment_size;			// 500 is "small", 1000 is "large"
-	// in Align(), k_offset = extend_size * 4 * error_rate; error_rate is .15 or .2,
+	// in Align(), k_offset = extend_size * 4 * error_rate,
 	// extend_size can be as high as segment_size + SEGMENT_BORDER
 	Alignment align;			// can be twice k_offset
 	OutputStore result;			// can be twice max read size
@@ -92,11 +94,18 @@ class DiffRunningData {
 	std::vector<DPathIndex> d_path_index;	// can be k_offset
 	std::vector<PathPoint> aln_path;	// can be twice k_offset
     public:
-	explicit DiffRunningData() : segment_size(500), align((segment_size + SEGMENT_BORDER) * 2), DynQ((segment_size + SEGMENT_BORDER) * 2), DynT((segment_size + SEGMENT_BORDER) * 2), d_path((segment_size + SEGMENT_BORDER) * (segment_size + SEGMENT_BORDER + 1) / 2), d_path_index(segment_size + SEGMENT_BORDER), aln_path((segment_size + SEGMENT_BORDER) * 2) { }
+	explicit DiffRunningData() : segment_size(500) { }
 	~DiffRunningData() { }
-	// can't figure out how to pass this in on initialization, short of a global
-	void set_size(const idx_t max_read_size) {
+	// can't figure out how to pass this in on initialization
+	void set_size(const double error_rate, const idx_t max_read_size) {
+		const size_t max_size(ceil((segment_size + SEGMENT_BORDER) * 4 * error_rate));
+		align.resize(max_size * 2);
 		result.resize(max_read_size * 2);
+		DynQ.resize(max_size * 2);
+		DynT.resize(max_size * 2);
+		d_path.resize(max_size * (max_size + 1) / 2);
+		d_path_index.resize(max_size);
+		aln_path.resize(max_size * 2);
 	}
 };
 

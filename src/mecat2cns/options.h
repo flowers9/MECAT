@@ -29,6 +29,7 @@ struct ConsensusOptions
     int		grid_start_delay;
     int		full_reads;
     idx_t	read_buffer_size;
+    double	error_rate;	// .15 for pacbio, .2 for nanopore
 };
 
 void

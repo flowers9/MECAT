@@ -313,6 +313,7 @@ void consensus_one_read_m4_pacbio(ConsensusThreadData& ctd, ConsensusPerThreadDa
 	std::string& nqstr(pctd.qaln);
 	std::string& ntstr(pctd.saln);
 	const int min_align_size(ctd.rco.min_align_size);
+	const double error_rate(ctd.rco.error_rate);
 	const int max_added(60);
 	std::vector<CnsTableItem>& cns_table(pctd.cns_table);
 	cns_table.assign(read_size, CnsTableItem());	// reset table
@@ -327,7 +328,7 @@ void consensus_one_read_m4_pacbio(ConsensusThreadData& ctd, ConsensusPerThreadDa
 		reads.GetSequence(ovlp.qid, ovlp.qdir == FWD, qstr);
 		const idx_t qext(ovlp.qdir == FWD ? ovlp.qext : ovlp.qsize - 1 - ovlp.qext);
 		const idx_t sext(ovlp.sext);
-		const bool r(GetAlignment(qstr, qext, tstr, sext, drd, m5, 0.15, min_align_size));
+		const bool r(GetAlignment(qstr, qext, tstr, sext, drd, m5, error_rate, min_align_size));
 		if (r) {
 			normalize_gaps(m5.qaln, m5.saln, nqstr, ntstr, 1);
 			meap_add_one_aln(nqstr, ntstr, m5.soff, cns_table);
@@ -356,6 +357,7 @@ consensus_one_read_m4_nanopore(ConsensusThreadData& ctd, ConsensusPerThreadData 
 	std::string& nqstr = pctd.qaln;
 	std::string& ntstr = pctd.saln;
 	const int min_align_size = ctd.rco.min_align_size;
+	const double error_rate(ctd.rco.error_rate);
 	const double min_mapping_ratio = ctd.rco.min_mapping_ratio - 0.02;
 
 	idx_t L, R;
@@ -381,7 +383,7 @@ consensus_one_read_m4_nanopore(ConsensusThreadData& ctd, ConsensusPerThreadData 
 		idx_t qext = ovlp.qext;
 		idx_t sext = ovlp.sext;
 		if (ovlp.qdir == REV) qext = ovlp.qsize - 1 - qext;
-		bool r = GetAlignment(qstr, qext, tstr, sext, drd, m5, 0.20, min_align_size);
+		bool r = GetAlignment(qstr, qext, tstr, sext, drd, m5, error_rate, min_align_size);
 		if (r && check_ovlp_mapping_range(m5.qoff, m5.qend, ovlp.qsize, m5.soff, m5.send, ovlp.ssize, min_mapping_ratio))
 		{
 			normalize_gaps(m5.qaln, m5.saln, nqstr, ntstr, 1);
@@ -435,6 +437,7 @@ void consensus_one_read_can_pacbio(ConsensusThreadData& ctd, ConsensusPerThreadD
 	std::string& nqstr(pctd.qaln);
 	std::string& ntstr(pctd.saln);
 	const int min_align_size(ctd.rco.min_align_size);
+	const double error_rate(ctd.rco.error_rate);
 	const double min_mapping_ratio(ctd.rco.min_mapping_ratio - 0.02);
 	int num_added(0);
 	const int max_added(60);
@@ -453,7 +456,7 @@ void consensus_one_read_can_pacbio(ConsensusThreadData& ctd, ConsensusPerThreadD
 		const idx_t qsize(reads.read_size(ec.qid));
 		reads.GetSequence(ec.qid, ec.qdir() == FWD, qstr);
 		const idx_t qext(ec.qdir() == FWD ? ec.qext() : qsize - 1 - ec.qext());
-		const bool r(GetAlignment(qstr, qext, tstr, ec.sext, drd, m5, 0.15, min_align_size));
+		const bool r(GetAlignment(qstr, qext, tstr, ec.sext, drd, m5, error_rate, min_align_size));
 		if (r && check_ovlp_mapping_range(m5.qoff, m5.qend, qsize, m5.soff, m5.send, ssize, min_mapping_ratio)) {
 			if (check_cov_stats(id_list, m5.soff, m5.send)) {
 				++num_added;
@@ -488,6 +491,7 @@ void consensus_one_read_can_nanopore(ConsensusThreadData& ctd, ConsensusPerThrea
 	std::string& nqstr(pctd.qaln);
 	std::string& ntstr(pctd.saln);
 	const int min_align_size(ctd.rco.min_align_size);
+	const double error_rate(ctd.rco.error_rate);
 	const double min_mapping_ratio(ctd.rco.min_mapping_ratio - 0.02);
 	int num_added(0);
 	int num_ext(0);
@@ -508,7 +512,7 @@ void consensus_one_read_can_nanopore(ConsensusThreadData& ctd, ConsensusPerThrea
 		reads.GetSequence(ec.qid, ec.qdir() == FWD, qstr);
 		const idx_t sext(ec.sext);
 		const idx_t qext(ec.qdir() == FWD ? ec.qext() : qsize - 1 - ec.qext());
-		const bool r(GetAlignment(qstr, qext, tstr, sext, drd, m5, 0.20, min_align_size));
+		const bool r(GetAlignment(qstr, qext, tstr, sext, drd, m5, error_rate, min_align_size));
 		if (r && check_ovlp_mapping_range(m5.qoff, m5.qend, qsize, m5.soff, m5.send, ssize, min_mapping_ratio)) {
 			if (check_cov_stats(id_list, m5.soff, m5.send)) {
 				++num_added;

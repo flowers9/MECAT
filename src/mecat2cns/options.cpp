@@ -15,6 +15,7 @@ static int cov_pacbio			= 4;
 static int min_size_pacbio		= 2000;
 static bool print_usage_pacbio		= false;
 static int tech_pacbio			= TECH_PACBIO;
+static double error_rate_pacbio		= .15;
 
 static int input_type_nanopore		= 1;
 static int num_threads_nanopore		= 1;
@@ -24,6 +25,7 @@ static int cov_nanopore			= 6;
 static int min_size_nanopore		= 2000;
 static bool print_usage_nanopore	= false;
 static int tech_nanopore		= TECH_NANOPORE;
+static double error_rate_nanopore	= .2;
 
 static int default_tech = TECH_PACBIO;
 static int num_partition_files = 0;
@@ -197,6 +199,7 @@ ConsensusOptions init_consensus_options(const int tech) {
 		t.min_size              = min_size_pacbio;
 		t.print_usage_info      = print_usage_pacbio;
 		t.tech                  = tech_pacbio;
+		t.error_rate		= error_rate_pacbio;
 	} else {
 		t.input_type            = input_type_nanopore;
 		t.num_threads           = num_threads_nanopore;
@@ -206,6 +209,7 @@ ConsensusOptions init_consensus_options(const int tech) {
 		t.min_size              = min_size_nanopore;
 		t.print_usage_info      = print_usage_nanopore;
 		t.tech                  = tech_nanopore;
+		t.error_rate		= error_rate_nanopore;
 	}
 	return t;
 }

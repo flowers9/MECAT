@@ -17,63 +17,73 @@ static void fill_align(const std::string& query, const int q_offset, const std::
 		}
 		d_path_aux = &d_path[d_path_index[d].d_offset + (d_path_aux->pre_k - d_path_index[d].min_k) / 2];
 	}
+	// walk backwards along align path to fill in sequence with gaps
 	align.reset();
 	int current_x(aln_path[aln_idx].x);
 	int current_y(aln_path[aln_idx].y);
-	const char* const query_p(query.data() + q_offset + (extend_forward ? 0 : 1));
-	const char* const target_p(target.data() + t_offset + (extend_forward ? 0 : 1));
-	for (--aln_idx; aln_idx != -1; --aln_idx) {
-		const int new_x(aln_path[aln_idx].x);
-		const int new_y(aln_path[aln_idx].y);
-		const int dx(new_x - current_x);
-		const int dy(new_y - current_y);
-		if (dx && dy) {
-			// apparently, dx always equals dy in this case
-			if (extend_forward) {
+	if (extend_forward) {
+		const char* const query_p(query.data() + q_offset);
+		const char* const target_p(target.data() + t_offset);
+		for (--aln_idx; aln_idx != -1; --aln_idx) {
+			const int new_x(aln_path[aln_idx].x);
+			const int new_y(aln_path[aln_idx].y);
+			const int dx(new_x - current_x);
+			const int dy(new_y - current_y);
+			if (dx && dy) {		// apparently, dx always equals dy in this case
 				std::copy(query_p + current_x, query_p + new_x, &align.q_aln_str[align.size]);
 				std::copy(target_p + current_y, target_p + new_y, &align.t_aln_str[align.size]);
 				align.size += dx;
-			} else {
+			} else if (dx) {
+				std::copy(query_p + current_x, query_p + new_x, &align.q_aln_str[align.size]);
+				std::fill(&align.t_aln_str[align.size], &align.t_aln_str[align.size] + dx, GAP_ALN);
+				align.size += dx;
+			} else if (dy) {
+				std::fill(&align.q_aln_str[align.size], &align.q_aln_str[align.size] + dy, GAP_ALN);
+				std::copy(target_p + current_y, target_p + new_y, &align.t_aln_str[align.size]);
+				align.size += dy;
+			}
+			current_x = new_x;
+			current_y = new_y;
+		}
+	} else {
+		const char* const query_p(query.data() + q_offset + 1);
+		const char* const target_p(target.data() + t_offset + 1);
+		for (--aln_idx; aln_idx != -1; --aln_idx) {
+			const int new_x(aln_path[aln_idx].x);
+			const int new_y(aln_path[aln_idx].y);
+			const int dx(new_x - current_x);
+			const int dy(new_y - current_y);
+			if (dx && dy) {		// apparently, dx always equals dy in this case
 				align.size += dx;
 				const int offset(align.q_aln_str.size() - align.size);
 				std::copy(query_p - new_x, query_p - current_x, &align.q_aln_str[offset]);
 				std::copy(target_p - new_y, target_p - current_y, &align.t_aln_str[offset]);
+			} else if (dx) {
+				align.size += dx;
+				const int offset(align.q_aln_str.size() - align.size);
+				std::copy(query_p - new_x, query_p - current_x, &align.q_aln_str[offset]);
+				std::fill(&align.t_aln_str[offset], &align.t_aln_str[offset] + dx, GAP_ALN);
+			} else if (dy) {
+				align.size += dy;
+				const int offset(align.q_aln_str.size() - align.size);
+				std::fill(&align.q_aln_str[offset], &align.q_aln_str[offset] + dy, GAP_ALN);
+				std::copy(target_p - new_y, target_p - current_y, &align.t_aln_str[offset]);
 			}
-		} else if (dx) {
-			if (extend_forward) {
-				std::copy(query_p + current_x, query_p + new_x, &align.q_aln_str[align.size]);
-				std::fill(&align.t_aln_str[align.size], &align.t_aln_str[align.size + dx], GAP_ALN);
-			} else {
-				std::copy(query_p - new_x, query_p - current_x, &align.q_aln_str[align.q_aln_str.size() - align.size - dx]);
-				std::fill(&align.t_aln_str[0] + align.t_aln_str.size() - align.size - dx, &align.t_aln_str[0] + align.t_aln_str.size() - align.size, GAP_ALN);
-			}
-			align.size += dx;
-		} else if (dy) {
-			if (extend_forward) {
-				std::fill(&align.q_aln_str[align.size], &align.q_aln_str[align.size + dy], GAP_ALN);
-				std::copy(target_p + current_y, target_p + new_y, &align.t_aln_str[align.size]);
-			} else {
-				std::fill(&align.q_aln_str[0] + align.q_aln_str.size() - align.size - dy, &align.q_aln_str[0] + align.q_aln_str.size() - align.size, GAP_ALN);
-				std::copy(target_p - new_y, target_p - current_y, &align.t_aln_str[align.t_aln_str.size() - align.size - dy]);
-			}
-			align.size += dy;
+			current_x = new_x;
+			current_y = new_y;
 		}
-		current_x = new_x;
-		current_y = new_y;
 	}
 }
 
 static int Align(const int extend_size, const std::string& query, const int q_offset, const std::string& target, const int t_offset, Alignment& align, std::vector<int>& V, std::vector<int>& U, std::vector<DPathData>& d_path, std::vector<DPathIndex>& d_path_index, std::vector<PathPoint>& aln_path, const int extend_forward, const double error_rate) {
 	const int k_offset(extend_size * 4 * error_rate);
-	U.assign(k_offset * 2, 0);
-	V.assign(k_offset * 2, 0);
 	const int band_tolerance(extend_size / 10 * 3 + 1);
 	const int max_band_size(band_tolerance * 2 - 1);
 	int d_path_idx(0), best_m(-1), min_k(0), max_k(0);
+	V[k_offset + 1] = 0;
 	for (int d(0); d < k_offset && max_k - min_k < max_band_size; ++d) {
 		// starting point of each "d" set of entries
 		d_path_index[d].set(d_path_idx, min_k);
-		// k is the offset between query and target
 		for (int k(min_k); k <= max_k; k += 2) {
 			int x, pre_k;
 			if (k == min_k || (k != max_k && V[k_offset + k - 1] < V[k_offset + k + 1])) {
@@ -184,8 +194,8 @@ static void dw_in_one_direction(const std::string& query, const int q_offset, co
 			if (align.aln_q_e == q_bps) {	// no good match
 				return;
 			}
-			// don't extend into the good match; keeping good match for
-			// next alignment, maybe?
+			// don't extend into the good match; keeping
+			// good match for next alignment, maybe?
 			q_extend += align.aln_q_e - q_bps;
 			t_extend += align.aln_t_e - t_bps;
 		} else if (align.aln_q_e == 0) {	// no good match
@@ -196,15 +206,15 @@ static void dw_in_one_direction(const std::string& query, const int q_offset, co
 			k = align.q_aln_str.size() - align.size;
 		}
 		if (extend_forward) {
-			const int i(result.buffer_start + result.right_size);
-			std::copy(&align.q_aln_str[0], &align.q_aln_str[0] + k, &result.q_buffer[i]);
-			std::copy(&align.t_aln_str[0], &align.t_aln_str[0] + k, &result.t_buffer[i]);
+			const int offset(result.buffer_start + result.right_size);
+			std::copy(&align.q_aln_str[0], &align.q_aln_str[0] + k, &result.q_buffer[offset]);
+			std::copy(&align.t_aln_str[0], &align.t_aln_str[0] + k, &result.t_buffer[offset]);
 			result.right_size += k;
 		} else {
 			result.left_size += align.q_aln_str.size() - k;
-			const int i(result.buffer_start - result.left_size);
-			std::copy(&align.q_aln_str[k], &align.q_aln_str[0] + align.q_aln_str.size(), &result.q_buffer[i]);
-			std::copy(&align.t_aln_str[k], &align.t_aln_str[0] + align.q_aln_str.size(), &result.t_buffer[i]);
+			const int offset(result.buffer_start - result.left_size);
+			std::copy(&align.q_aln_str[k], &align.q_aln_str[0] + align.q_aln_str.size(), &result.q_buffer[offset]);
+			std::copy(&align.t_aln_str[k], &align.t_aln_str[0] + align.q_aln_str.size(), &result.t_buffer[offset]);
 		}
 	} while (not_at_end);
 }
