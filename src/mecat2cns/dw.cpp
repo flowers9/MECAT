@@ -75,23 +75,23 @@ static void fill_align(const std::string& query, const int q_offset, const std::
 	}
 }
 
-static int Align(const int extend_size, const std::string& query, const int q_offset, const std::string& target, const int t_offset, Alignment& align, std::vector<int>& V, std::vector<int>& combined_match_length, std::vector<DPathData>& d_path, std::vector<DPathIndex>& d_path_index, std::vector<PathPoint>& aln_path, const int extend_forward, const double error_rate) {
+static int Align(const int extend_size, const std::string& query, const int q_offset, const std::string& target, const int t_offset, Alignment& align, std::vector<int>& q_extent, std::vector<int>& combined_match_length, std::vector<DPathData>& d_path, std::vector<DPathIndex>& d_path_index, std::vector<PathPoint>& aln_path, const int extend_forward, const double error_rate) {
 	const int k_offset(extend_size * 4 * error_rate);
 	const int band_tolerance(extend_size / 10 * 3);
 	const int max_band_size(band_tolerance * 2 + 1);
 	int d_path_idx(0), best_combined_match_length(0), min_k(0), max_k(0);
-	V[k_offset + 1] = 0;	// initialize starting point
+	q_extent[k_offset + 1] = 0;	// initialize starting point
 	for (int d(0); d != k_offset && max_k - min_k < max_band_size; ++d) {
 		// starting point of each "d" set of entries
 		d_path_index[d].set(d_path_idx, min_k);
 		for (int k(min_k); k <= max_k; k += 2) {
 			int q_pos, pre_k;
-			if (k == min_k || (k != max_k && V[k_offset + k - 1] < V[k_offset + k + 1])) {
+			if (k == min_k || (k != max_k && q_extent[k_offset + k - 1] < q_extent[k_offset + k + 1])) {
 				pre_k = k + 1;
-				q_pos = V[k_offset + k + 1];
+				q_pos = q_extent[k_offset + k + 1];
 			} else {
 				pre_k = k - 1;
-				q_pos = V[k_offset + k - 1] + 1;
+				q_pos = q_extent[k_offset + k - 1] + 1;
 			}
 			int t_pos(q_pos - k);
 			// start of exact match
@@ -109,7 +109,7 @@ static int Align(const int extend_size, const std::string& query, const int q_of
 				return 1;
 			}
 			++d_path_idx;
-			V[k_offset + k] = q_pos;
+			q_extent[k_offset + k] = q_pos;
 			combined_match_length[k_offset + k] = q_pos + t_pos;
 			if (best_combined_match_length < q_pos + t_pos) {
 				best_combined_match_length = q_pos + t_pos;

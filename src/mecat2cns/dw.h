@@ -14,9 +14,9 @@ class Alignment {
     public:
 	explicit Alignment() { }
 	~Alignment() { }
-	void resize(const size_t new_max_size) {
-		q_aln_str.resize(new_max_size);
-		t_aln_str.resize(new_max_size);
+	void resize(const size_t max_size) {
+		q_aln_str.resize(max_size);
+		t_aln_str.resize(max_size);
 	}
 	void reset() {
 		size = 0;
@@ -35,9 +35,9 @@ class OutputStore {
 	explicit OutputStore() { }
 	~OutputStore() { }
 	// can't figure out how to pass this in on initialization
-	void resize(const size_t new_max_size) {
-		q_buffer.resize(new_max_size);
-		t_buffer.resize(new_max_size);
+	void resize(const size_t max_size) {
+		q_buffer.resize(max_size);
+		t_buffer.resize(max_size);
 	}
 	void reset_buffer(const int i) {
 		buffer_start = i;
@@ -84,28 +84,29 @@ struct PathPoint {
 
 class DiffRunningData {
     public:
-	const int segment_size;			// 500 is "small", 1000 is "large"
-	// in Align(), k_offset = extend_size * 4 * error_rate,
-	// extend_size can be as high as segment_size + SEGMENT_BORDER
-	Alignment align;			// can be twice k_offset
-	OutputStore result;			// can be twice max read size
-	std::vector<int> DynQ, DynT;		// can be twice k_offset
-	std::vector<DPathData> d_path;		// can be 1/2 k_offset^2
-	std::vector<DPathIndex> d_path_index;	// can be k_offset
-	std::vector<PathPoint> aln_path;	// can be twice k_offset
+	static const int segment_size = 500;		// 500 is "small", 1000 is "large"
+	Alignment align;
+	OutputStore result;
+	std::vector<int> DynQ, DynT;
+	std::vector<DPathData> d_path;
+	std::vector<DPathIndex> d_path_index;
+	std::vector<PathPoint> aln_path;
     public:
-	explicit DiffRunningData() : segment_size(500) { }
+	explicit DiffRunningData() { }
 	~DiffRunningData() { }
-	// can't figure out how to pass this in on initialization
+	// can't figure out how to pass these in on initialization
 	void set_size(const double error_rate, const idx_t max_read_size) {
-		const size_t max_size(ceil((segment_size + SEGMENT_BORDER) * 4 * error_rate));
-		align.resize(max_size * 2);
+		const size_t max_extend_size(segment_size + SEGMENT_BORDER);
+		// in Align(), k_offset = extend_size * 4 * error_rate,
+		const size_t max_k_offset(ceil(max_extend_size * 4 * error_rate));
+		// allocate largest first (approximately)
+		d_path.resize(max_k_offset * (max_k_offset + 1) / 2);
 		result.resize(max_read_size * 2);
-		DynQ.resize(max_size * 2);
-		DynT.resize(max_size * 2);
-		d_path.resize(max_size * (max_size + 1) / 2);
-		d_path_index.resize(max_size);
-		aln_path.resize(max_size * 2);
+		aln_path.resize(max_k_offset * 4);
+		align.resize(max_extend_size * 2);
+		DynQ.resize(max_k_offset * 2);
+		DynT.resize(max_k_offset * 2);
+		d_path_index.resize(max_k_offset);
 	}
 };
 
