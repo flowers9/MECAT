@@ -12,7 +12,7 @@
 struct CnsTableItem {
 	char base;
 	uint1 mat_cnt, ins_cnt, del_cnt;
-	CnsTableItem() : base('N'), mat_cnt(0), ins_cnt(0), del_cnt(0) { }
+	explicit CnsTableItem() : base('N'), mat_cnt(0), ins_cnt(0), del_cnt(0) { }
 };
 
 #define MAX_CNS_OVLPS 100
@@ -55,14 +55,14 @@ class CnsAln : public MappingRange {
 	}
     private:
 	int aln_idx_;
-	// despite never changing, we can't make these const because they get used in
-	// a vector which uses default construction and copy mechanics
+	// despite never changing, we can't make these const because this class
+	// is used in a vector which uses default construction and copy mechanics
 	std::string qaln_, saln_;
 };
 
 class CnsAlns {
     public:
-	CnsAlns() { }
+	explicit CnsAlns() { }
 	~CnsAlns() { }
 	void clear() {
 		cns_alns_.clear();
@@ -169,7 +169,17 @@ class ConsensusThreadData {
 	idx_t ec_offset;
 	std::vector<ConsensusPerThreadData> data;
     public:
-	ConsensusThreadData(ReadsCorrectionOptions& prco, PackedDB& r, std::ostream& output, const char* const input_file_name) : rco(prco), reads(r), out(output), ec_offset(0), data(prco.num_threads, ConsensusPerThreadData(prco.error_rate, r.max_read_size())), last_thread_id_(-1), num_threads_written_(0), done_file_(std::string(input_file_name) + ".done"), ckpt_file_(std::string(input_file_name) + ".ckpt"), ckpt_file_tmp_(ckpt_file_ + ".tmp") { }
+	ConsensusThreadData(ReadsCorrectionOptions& prco, PackedDB& r, std::ostream& output, const std::string& input_file_name) :
+		rco(prco),
+		reads(r),
+		out(output),
+		ec_offset(0),
+		data(rco.num_threads, ConsensusPerThreadData(rco.error_rate, reads.max_read_size())),
+		last_thread_id_(-1),
+		num_threads_written_(0),
+		done_file_(input_file_name + ".done"),
+		ckpt_file_(input_file_name + ".ckpt"),
+		ckpt_file_tmp_(ckpt_file_ + ".tmp") { }
 	~ConsensusThreadData() { }
 	int get_thread_id() {
 		std::lock_guard<std::mutex> lock(id_lock_);
@@ -178,15 +188,17 @@ class ConsensusThreadData {
 	}
 	void reset_threads() {
 		last_thread_id_ = -1;
-		for (int i(0); i < rco.num_threads; ++i) {
-			data[i].next_candidate = 0;
+		std::vector<ConsensusPerThreadData>::iterator a(data.begin());
+		const std::vector<ConsensusPerThreadData>::const_iterator end_a(data.end());
+		for (; a != end_a; ++a) {
+			a->next_candidate = 0;
 		}
 	}
 	void write_buffer(const int tid, const idx_t i) {
 		ConsensusPerThreadData& pdata(data[tid]);
-		std::vector<CnsResult>::const_iterator a(pdata.cns_results.begin());
-		const std::vector<CnsResult>::const_iterator end_a(pdata.cns_results.end());
 		{
+			std::vector<CnsResult>::const_iterator a(pdata.cns_results.begin());
+			const std::vector<CnsResult>::const_iterator end_a(pdata.cns_results.end());
 			std::lock_guard<std::mutex> lock(out_lock);
 			for (; a != end_a; ++a) {
 				out << ">" << a->id << "_" << a->range[0] << "_" << a->range[1] << "_" << a->seq.size() << "\n" << a->seq << "\n";
@@ -203,9 +215,11 @@ class ConsensusThreadData {
 		pdata.cns_results.clear();
 	}
 	int restart(off_t& output_pos) {
-		if (access(ckpt_file_.c_str(), F_OK) != 0) {
-			for (int i(0); i < rco.num_threads; ++i) {
-				data[i].next_candidate = 0;
+		std::vector<ConsensusPerThreadData>::iterator a(data.begin());
+		const std::vector<ConsensusPerThreadData>::const_iterator end_a(data.end());
+		if (access(ckpt_file_.c_str(), F_OK) != 0) {		// fresh start
+			for (; a != end_a; ++a) {
+				a->next_candidate = 0;
 			}
 			return 0;
 		}
@@ -217,8 +231,8 @@ class ConsensusThreadData {
 		if (!ckpt_in) {
 			ERROR("Restart failed: could not read checkpoint file: %s", ckpt_file_.c_str());
 		}
-		for (int i(0); i < rco.num_threads; ++i) {
-			ckpt_in >> data[i].next_candidate;
+		for (; a != end_a; ++a) {
+			ckpt_in >> a->next_candidate;
 			if (!ckpt_in) {
 				ERROR("Restart failed: could not read checkpoint file: %s", ckpt_file_.c_str());
 			}
@@ -238,8 +252,10 @@ class ConsensusThreadData {
 			LOG(stderr, "Checkpoint failed: write failed: %s", ckpt_file_tmp_.c_str());
 			return;
 		}
-		for (int i(0); i < rco.num_threads; ++i) {
-			ckpt_out << data[i].next_candidate << "\n";
+		std::vector<ConsensusPerThreadData>::iterator a(data.begin());
+		const std::vector<ConsensusPerThreadData>::const_iterator end_a(data.end());
+		for (; a != end_a; ++a) {
+			ckpt_out << a->next_candidate << "\n";
 			if (!ckpt_out) {
 				LOG(stderr, "Checkpoint failed: write failed: %s", ckpt_file_tmp_.c_str());
 				return;
