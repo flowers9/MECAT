@@ -3,6 +3,7 @@
 
 #include <vector>	// vector<>
 #include <unistd.h>
+#include <mutex>	// lock_guard<>, mutex
 
 #include "dw.h"		// DiffRunningData, M5Record
 #include "packed_db.h"
@@ -10,9 +11,7 @@
 
 struct CnsTableItem {
 	char base;
-	uint1 mat_cnt;
-	uint1 ins_cnt;
-	uint1 del_cnt;
+	uint1 mat_cnt, ins_cnt, del_cnt;
 	CnsTableItem() : base('N'), mat_cnt(0), ins_cnt(0), del_cnt(0) { }
 };
 
@@ -26,37 +25,39 @@ struct MappingRange {
 
 class CnsAln : public MappingRange {
     public:
-	explicit CnsAln(const int i, const int j, const std::string& q, const std::string& s) : MappingRange(i, j), aln_idx(0), qaln(s), saln(q) { }
+	explicit CnsAln(const int i, const int j, const std::string& q, const std::string& s) : MappingRange(i, j), aln_idx_(0), qaln_(s), saln_(q) { }
 	~CnsAln() { }
 	int retrieve_aln_subseqs(const int sb, const int se, std::string& qstr, std::string& tstr, int& sb_out) {
-		const int aln_size(saln.size() - 1);
-		if (se <= start || sb >= end || aln_idx == aln_size) {
+		const int aln_size(saln_.size() - 1);
+		if (se <= start || sb >= end || aln_idx_ == aln_size) {
 			return 0;
 		}
 		sb_out = std::max(start, sb);
-		while (start < sb && aln_idx < aln_size) {
-			if (saln[++aln_idx] != GAP) {
+		while (start < sb && aln_idx_ < aln_size) {
+			if (saln_[++aln_idx_] != GAP) {
 				++start;
 			}
 		}
 		// should we test for start < sb, and return 0 if so,
 		// rather than returning the last basepair of the alignment?
-		const int aln_start(aln_idx);
-		while (start < se && aln_idx < aln_size) {
-			if (saln[++aln_idx] != GAP) {
+		const int aln_start(aln_idx_);
+		while (start < se && aln_idx_ < aln_size) {
+			if (saln_[++aln_idx_] != GAP) {
 				++start;
 			}
 		}
 		// this looks like it could return the same basepair twice -
 		// once at the end of a call, once at the start of the next
-		const int aln_length(aln_idx - aln_start + 1);
-		qstr.assign(qaln, aln_start, aln_length);
-		tstr.assign(saln, aln_start, aln_length);
+		const int aln_length(aln_idx_ - aln_start + 1);
+		qstr.assign(qaln_, aln_start, aln_length);
+		tstr.assign(saln_, aln_start, aln_length);
 		return 1;
 	}
     private:
-	int aln_idx;
-	std::string qaln, saln;
+	int aln_idx_;
+	// despite never changing, we can't make these const because they get used in
+	// a vector which uses default construction and copy mechanics
+	std::string qaln_, saln_;
 };
 
 class CnsAlns {
@@ -80,11 +81,7 @@ class CnsAlns {
 		cns_alns_.push_back(CnsAln(soff, send, qstr, tstr));
 	}
 	void get_mapping_ranges(std::vector<MappingRange>& ranges) const {
-		ranges.clear();
-		ranges.reserve(cns_alns_.size());
-		for (size_t i(0); i < cns_alns_.size(); ++i) {
-			ranges.push_back(cns_alns_[i]);
-		}
+		ranges.assign(cns_alns_.begin(), cns_alns_.end());
 	}
     private:
 	std::vector<CnsAln> cns_alns_;
@@ -155,15 +152,12 @@ class ConsensusPerThreadData {
 	std::vector<CnsResult> cns_results;
 	std::string query, target, qaln, saln;
     public:
-	ConsensusPerThreadData() {
+	explicit ConsensusPerThreadData(const double error_rate, const idx_t max_read_size) : drd(error_rate, max_read_size) {
 		// we'll definitely be seeing at least this much use,
 		// so might as well preallocate
 		cns_results.reserve(MAX_CNS_RESULTS);
 	}
 	~ConsensusPerThreadData() { }
-	void set_size(const double error_rate, const idx_t max_read_size) {
-		drd.set_size(error_rate, max_read_size);
-	}
 };
 
 class ConsensusThreadData {
@@ -171,35 +165,15 @@ class ConsensusThreadData {
 	ReadsCorrectionOptions& rco;
 	PackedDB& reads;
 	std::ostream& out;
-	ConsensusPerThreadData* data;
-	pthread_mutex_t out_lock;
+	std::mutex out_lock;
 	idx_t ec_offset;
-	// this doesn't work as a vector - all the pointers end up pointing
-	// to the same values, and eventually it seg faults (possibly a
-	// compiler optimization bug)
+	std::vector<ConsensusPerThreadData> data;
     public:
-	ConsensusThreadData(ReadsCorrectionOptions& prco, PackedDB& r, std::ostream& output, const char* const input_file_name) : rco(prco), reads(r), out(output), data(new ConsensusPerThreadData[prco.num_threads]), ec_offset(0), last_thread_id_(-1), num_threads_written_(0) {
-		done_file_ = input_file_name;
-		done_file_ += ".done";
-		ckpt_file_ = input_file_name;
-		ckpt_file_ += ".ckpt";
-		ckpt_file_tmp_ = ckpt_file_ + ".tmp";
-		pthread_mutex_init(&out_lock, NULL);
-		pthread_mutex_init(&id_lock_, NULL);
-		const idx_t max_read_size(reads.max_read_size());
-		for (int i(0); i != rco.num_threads; ++i) {
-			data[i].set_size(rco.error_rate, max_read_size);
-		}
-	}
-	~ConsensusThreadData() {
-		delete[] data;
-		pthread_mutex_destroy(&out_lock);
-		pthread_mutex_destroy(&id_lock_);
-	}
+	ConsensusThreadData(ReadsCorrectionOptions& prco, PackedDB& r, std::ostream& output, const char* const input_file_name) : rco(prco), reads(r), out(output), ec_offset(0), data(prco.num_threads, ConsensusPerThreadData(prco.error_rate, r.max_read_size())), last_thread_id_(-1), num_threads_written_(0), done_file_(std::string(input_file_name) + ".done"), ckpt_file_(std::string(input_file_name) + ".ckpt"), ckpt_file_tmp_(ckpt_file_ + ".tmp") { }
+	~ConsensusThreadData() { }
 	int get_thread_id() {
-		pthread_mutex_lock(&id_lock_);
+		std::lock_guard<std::mutex> lock(id_lock_);
 		const int tid(++last_thread_id_);
-		pthread_mutex_unlock(&id_lock_);
 		return tid;
 	}
 	void reset_threads() {
@@ -212,19 +186,20 @@ class ConsensusThreadData {
 		ConsensusPerThreadData& pdata(data[tid]);
 		std::vector<CnsResult>::const_iterator a(pdata.cns_results.begin());
 		const std::vector<CnsResult>::const_iterator end_a(pdata.cns_results.end());
-		pthread_mutex_lock(&out_lock);
-		for (; a != end_a; ++a) {
-			out << ">" << a->id << "_" << a->range[0] << "_" << a->range[1] << "_" << a->seq.size() << "\n" << a->seq << "\n";
-			if (!out) {
-				ERROR("Error writing output");
+		{
+			std::lock_guard<std::mutex> lock(out_lock);
+			for (; a != end_a; ++a) {
+				out << ">" << a->id << "_" << a->range[0] << "_" << a->range[1] << "_" << a->seq.size() << "\n" << a->seq << "\n";
+				if (!out) {
+					ERROR("Error writing output");
+				}
+			}
+			pdata.next_candidate = i;
+			if (++num_threads_written_ >= rco.num_threads) {
+				checkpoint();
+				num_threads_written_ = 0;
 			}
 		}
-		pdata.next_candidate = i;
-		if (++num_threads_written_ >= rco.num_threads) {
-			checkpoint();
-			num_threads_written_ = 0;
-		}
-		pthread_mutex_unlock(&out_lock);
 		pdata.cns_results.clear();
 	}
 	int restart(off_t& output_pos) {
@@ -276,7 +251,7 @@ class ConsensusThreadData {
 		}
 	}
     private:
-	pthread_mutex_t id_lock_;
+	std::mutex id_lock_;
 	int last_thread_id_, num_threads_written_;
 	std::string done_file_, ckpt_file_, ckpt_file_tmp_;
 };

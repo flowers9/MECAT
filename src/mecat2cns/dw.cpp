@@ -18,7 +18,7 @@ static void fill_align(const std::string& query, const int q_offset, const std::
 		d_path_aux = &d_path[d_path_index[d].d_offset + (d_path_aux->pre_k - d_path_index[d].min_k) / 2];
 	}
 	// walk backwards along align path to fill in sequence with gaps
-	align.reset();
+	align.clear();
 	int current_x(aln_path[aln_idx].x);
 	int current_y(aln_path[aln_idx].y);
 	if (extend_forward) {
@@ -30,17 +30,17 @@ static void fill_align(const std::string& query, const int q_offset, const std::
 			const int dx(new_x - current_x);
 			const int dy(new_y - current_y);
 			if (dx && dy) {		// apparently, dx always equals dy in this case
-				std::copy(query_p + current_x, query_p + new_x, &align.q_aln_str[align.size]);
-				std::copy(target_p + current_y, target_p + new_y, &align.t_aln_str[align.size]);
-				align.size += dx;
+				std::copy(query_p + current_x, query_p + new_x, &align.q_aln_str[align.current_size]);
+				std::copy(target_p + current_y, target_p + new_y, &align.t_aln_str[align.current_size]);
+				align.current_size += dx;
 			} else if (dx) {
-				std::copy(query_p + current_x, query_p + new_x, &align.q_aln_str[align.size]);
-				std::fill(&align.t_aln_str[align.size], &align.t_aln_str[align.size] + dx, GAP_ALN);
-				align.size += dx;
+				std::copy(query_p + current_x, query_p + new_x, &align.q_aln_str[align.current_size]);
+				std::fill(&align.t_aln_str[align.current_size], &align.t_aln_str[align.current_size] + dx, GAP_ALN);
+				align.current_size += dx;
 			} else if (dy) {
-				std::fill(&align.q_aln_str[align.size], &align.q_aln_str[align.size] + dy, GAP_ALN);
-				std::copy(target_p + current_y, target_p + new_y, &align.t_aln_str[align.size]);
-				align.size += dy;
+				std::fill(&align.q_aln_str[align.current_size], &align.q_aln_str[align.current_size] + dy, GAP_ALN);
+				std::copy(target_p + current_y, target_p + new_y, &align.t_aln_str[align.current_size]);
+				align.current_size += dy;
 			}
 			current_x = new_x;
 			current_y = new_y;
@@ -54,18 +54,18 @@ static void fill_align(const std::string& query, const int q_offset, const std::
 			const int dx(new_x - current_x);
 			const int dy(new_y - current_y);
 			if (dx && dy) {		// apparently, dx always equals dy in this case
-				align.size += dx;
-				const int offset(align.q_aln_str.size() - align.size);
+				align.current_size += dx;
+				const int offset(align.q_aln_str.size() - align.current_size);
 				std::copy(query_p - new_x, query_p - current_x, &align.q_aln_str[offset]);
 				std::copy(target_p - new_y, target_p - current_y, &align.t_aln_str[offset]);
 			} else if (dx) {
-				align.size += dx;
-				const int offset(align.q_aln_str.size() - align.size);
+				align.current_size += dx;
+				const int offset(align.q_aln_str.size() - align.current_size);
 				std::copy(query_p - new_x, query_p - current_x, &align.q_aln_str[offset]);
 				std::fill(&align.t_aln_str[offset], &align.t_aln_str[offset] + dx, GAP_ALN);
 			} else if (dy) {
-				align.size += dy;
-				const int offset(align.q_aln_str.size() - align.size);
+				align.current_size += dy;
+				const int offset(align.q_aln_str.size() - align.current_size);
 				std::fill(&align.q_aln_str[offset], &align.q_aln_str[offset] + dy, GAP_ALN);
 				std::copy(target_p - new_y, target_p - current_y, &align.t_aln_str[offset]);
 			}
@@ -145,9 +145,9 @@ static void dw_in_one_direction(const std::string& query, const int q_offset, co
 			// matching basepairs), counting non-gap basepairs
 			int q_bps(0), t_bps(0), num_matches(0);
 			if (extend_forward) {
-				for (k = align.size - 1; k != -1; --k) {
-					const char qc(align.q_aln_str[k]);
-					const char tc(align.t_aln_str[k]);
+				for (k = align.current_size - 1; k != -1; --k) {
+					const uint1 qc(align.q_aln_str[k]);
+					const uint1 tc(align.t_aln_str[k]);
 					if (qc != tc) {
 						num_matches = 0;
 						if (qc == GAP_ALN) {
@@ -159,13 +159,13 @@ static void dw_in_one_direction(const std::string& query, const int q_offset, co
 						break;
 					}
 				}
-				q_bps += align.size - k;
-				t_bps += align.size - k;
+				q_bps += align.current_size - k;
+				t_bps += align.current_size - k;
 			} else {
-				const int offset(align.q_aln_str.size() - align.size);
+				const int offset(align.q_aln_str.size() - align.current_size);
 				for (k = offset; k != static_cast<int>(align.q_aln_str.size()); ++k) {
-					const char qc(align.q_aln_str[k]);
-					const char tc(align.t_aln_str[k]);
+					const uint1 qc(align.q_aln_str[k]);
+					const uint1 tc(align.t_aln_str[k]);
 					if (qc != tc) {
 						num_matches = 0;
 						if (qc == GAP_ALN) {
@@ -191,9 +191,9 @@ static void dw_in_one_direction(const std::string& query, const int q_offset, co
 		} else if (align.aln_q_e == 0) {	// no good match
 			return;
 		} else if (extend_forward) {
-			k = align.size;
+			k = align.current_size;
 		} else {
-			k = align.q_aln_str.size() - align.size;
+			k = align.q_aln_str.size() - align.current_size;
 		}
 		if (extend_forward) {
 			const int offset(result.buffer_start + result.right_size);
@@ -209,7 +209,7 @@ static void dw_in_one_direction(const std::string& query, const int q_offset, co
 	} while (not_at_end);
 }
 
-static int gap_count(const std::vector<char>& buffer, int i, const int end_i) {
+static int gap_count(const std::vector<uint1>& buffer, int i, const int end_i) {
 	int j(0);
 	for (; i != end_i; ++i) {
 		if (buffer[i] == GAP_ALN) {
@@ -220,7 +220,7 @@ static int gap_count(const std::vector<char>& buffer, int i, const int end_i) {
 }
 
 static int dw(const std::string& query, const int query_start, const std::string& target, const int target_start, std::vector<int>& U, std::vector<int>& V, Alignment& align, std::vector<DPathData>& d_path, std::vector<DPathIndex>& d_path_index, std::vector<PathPoint>& aln_path, OutputStore& result, const int segment_size, const double error_rate, const int min_aln_size) {
-	result.reset_buffer(query_start + target_start);
+	result.clear(query_start + target_start);
 	// reverse extend (left side)
 	dw_in_one_direction(query, query_start - 1, target, target_start - 1, U, V, align, d_path, d_path_index, aln_path, segment_size, result, 0, error_rate);
 	// forward extend (right side)
@@ -237,10 +237,10 @@ static int dw(const std::string& query, const int query_start, const std::string
 	return 1;
 }
 
-static void decode_sequence(std::string& out_seq, const std::vector<char>& in_seq, const size_t offset, const size_t size) {
+static void decode_sequence(std::string& out_seq, const std::vector<uint1>& in_seq, const size_t offset, const size_t size) {
 	out_seq.resize(size);
 	for (size_t i(0); i != size; ++i) {
-		out_seq[i] = "ACGT-"[static_cast<int>(in_seq[offset + i])];
+		out_seq[i] = "ACGT-"[in_seq[offset + i]];
 	}
 }
 
@@ -259,8 +259,8 @@ int GetAlignment(const std::string& query, const int query_start, const std::str
 	const int end_k(result.buffer_start + result.right_size);
 	int k(start_k);
 	for (; k != end_k; ++k) {
-		const char qc(result.q_buffer[k]);
-		const char tc(result.t_buffer[k]);
+		const uint1 qc(result.q_buffer[k]);
+		const uint1 tc(result.t_buffer[k]);
 		if (qc != tc) {
 			eit = 0;
 			// we don't count gaps
@@ -285,8 +285,8 @@ int GetAlignment(const std::string& query, const int query_start, const std::str
 	int tre(0);	// t ending basepair offset to good sequence
 	eit = 0;	// still matching run length
 	for (k = end_k - 1;; --k) {
-		const char qc(result.q_buffer[k]);
-		const char tc(result.t_buffer[k]);
+		const uint1 qc(result.q_buffer[k]);
+		const uint1 tc(result.t_buffer[k]);
 		if (qc != tc) {
 			eit = 0;
 			// we don't count gaps

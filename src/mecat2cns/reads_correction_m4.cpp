@@ -36,14 +36,15 @@ void* reads_correction_func_m4(void* arg) {
 			consensus_one_read_m4_nanopore(data, pdata, sid, i, j);
 		}
 		if (pdata.cns_results.size() >= MAX_CNS_RESULTS) {
-			pthread_mutex_lock(&data.out_lock);
-			for (std::vector<CnsResult>::iterator iter = pdata.cns_results.begin(); iter != pdata.cns_results.end(); ++iter) {
-				data.out << ">" << iter->id << "_" << iter->range[0] << "_" << iter->range[1] << "_" << iter->seq.size() << "\n" << iter->seq << "\n";
-				if (!data.out) {
-					ERROR("Error writing output");
+			{
+				std::lock_guard<std::mutex> lock(data.out_lock);
+				for (std::vector<CnsResult>::iterator iter = pdata.cns_results.begin(); iter != pdata.cns_results.end(); ++iter) {
+					data.out << ">" << iter->id << "_" << iter->range[0] << "_" << iter->range[1] << "_" << iter->seq.size() << "\n" << iter->seq << "\n";
+					if (!data.out) {
+						ERROR("Error writing output");
+					}
 				}
 			}
-			pthread_mutex_unlock(&data.out_lock);
 			pdata.cns_results.clear();
 		}
 		i = j;

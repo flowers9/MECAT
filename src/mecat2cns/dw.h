@@ -8,18 +8,17 @@
 
 class Alignment {
     public:
-	// size tracks actual buffer use
-	int aln_q_e, aln_t_e, size;
-	std::vector<char> q_aln_str, t_aln_str;
+	// current_size tracks actual buffer use
+	int aln_q_e, aln_t_e, current_size;
+	std::vector<uint1> q_aln_str, t_aln_str;
     public:
-	explicit Alignment() { }
+	explicit Alignment(const size_t max_size) : q_aln_str(max_size), t_aln_str(max_size) { }
 	~Alignment() { }
-	void resize(const size_t max_size) {
-		q_aln_str.resize(max_size);
-		t_aln_str.resize(max_size);
+	size_t size() const {
+		return q_aln_str.size();
 	}
-	void reset() {
-		size = 0;
+	void clear() {
+		current_size = 0;
 	}
 };
 
@@ -30,16 +29,14 @@ class OutputStore {
 	int buffer_start, left_size, right_size;
 	int query_start, query_end;
 	int target_start, target_end;
-	std::vector<char> q_buffer, t_buffer;
+	std::vector<uint1> q_buffer, t_buffer;
     public:
-	explicit OutputStore() { }
+	explicit OutputStore(const size_t max_size) : q_buffer(max_size), t_buffer(max_size) { }
 	~OutputStore() { }
-	// can't figure out how to pass this in on initialization
-	void resize(const size_t max_size) {
-		q_buffer.resize(max_size);
-		t_buffer.resize(max_size);
+	size_t size() const {
+		return q_buffer.size();
 	}
-	void reset_buffer(const int i) {
+	void clear(const int i) {
 		buffer_start = i;
 		left_size = right_size = 0;
 	}
@@ -47,8 +44,6 @@ class OutputStore {
 
 struct DPathData {
 	int x1, y1, x2, y2, pre_k;
-	explicit DPathData() { }
-	explicit DPathData(const int i, const int j, const int k, const int l, const int m) : x1(i), y1(j), x2(k), y2(l), pre_k(m) { }
 	void set(const int i, const int j, const int k, const int l, const int m) {
 		x1 = i;
 		y1 = j;
@@ -60,7 +55,6 @@ struct DPathData {
 
 struct DPathIndex {
 	int d_offset, min_k;
-	explicit DPathIndex() { }
 	void set(const int i, const int j) {
 		d_offset = i;
 		min_k = j;
@@ -69,7 +63,6 @@ struct DPathIndex {
 
 struct PathPoint {
 	int x, y;
-	explicit PathPoint() { }
 	void set(const int i, const int j) {
 		x = i;
 		y = j;
@@ -92,29 +85,22 @@ class DiffRunningData {
 	std::vector<DPathIndex> d_path_index;
 	std::vector<PathPoint> aln_path;
     public:
-	explicit DiffRunningData() { }
+	explicit DiffRunningData(const double error_rate, const idx_t max_read_size) :
+		align((segment_size + SEGMENT_BORDER) * 2),
+		result(max_read_size * 2),
+		DynQ(ceil((segment_size + SEGMENT_BORDER) * 4 * error_rate) * 2),
+		DynT(ceil((segment_size + SEGMENT_BORDER) * 4 * error_rate) * 2),
+		d_path(ceil((segment_size + SEGMENT_BORDER) * 4 * error_rate) * ceil((segment_size + SEGMENT_BORDER) * 4 * error_rate + 1) / 2),
+		d_path_index(ceil((segment_size + SEGMENT_BORDER) * 4 * error_rate)),
+		aln_path(ceil((segment_size + SEGMENT_BORDER) * 4 * error_rate) * 4) { }
 	~DiffRunningData() { }
-	// can't figure out how to pass these in on initialization
-	void set_size(const double error_rate, const idx_t max_read_size) {
-		const size_t max_extend_size(segment_size + SEGMENT_BORDER);
-		// in Align(), k_offset = extend_size * 4 * error_rate,
-		const size_t max_k_offset(ceil(max_extend_size * 4 * error_rate));
-		// allocate largest first (approximately)
-		d_path.resize(max_k_offset * (max_k_offset + 1) / 2);
-		result.resize(max_read_size * 2);
-		aln_path.resize(max_k_offset * 4);
-		align.resize(max_extend_size * 2);
-		DynQ.resize(max_k_offset * 2);
-		DynT.resize(max_k_offset * 2);
-		d_path_index.resize(max_k_offset);
-	}
 };
 
 class M5Record {
     public:
 	idx_t qoff, qend, soff, send;
 	std::string qaln, saln;
-	M5Record() { }
+	explicit M5Record() { }
 	~M5Record() { }
 };
 
