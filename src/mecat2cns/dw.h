@@ -92,7 +92,7 @@ class DiffRunningData {
 		DynT(ceil((segment_size + SEGMENT_BORDER) * 4 * error_rate) * 2),
 		// effectively a right triangle on a rectangle,
 		// as it's bounded geometric growth (4 * error_rate limited to .3)
-		d_path(4 * error_rate < .3 ? ceil((segment_size + SEGMENT_BORDER) * (segment_size + SEGMENT_BORDER) * .3 * (.15 + 4 * error_rate - .3)) : ceil((segment_size + SEGMENT_BORDER) * 4 * error_rate) * ceil((segment_size + SEGMENT_BORDER) * 4 * error_rate + 1) / 2),
+		d_path(4 * error_rate < .3 ? ceil((segment_size + SEGMENT_BORDER) * .3 + 1) * ceil((segment_size + SEGMENT_BORDER) * .3 + 2) / 2 + ceil((segment_size + SEGMENT_BORDER) * .3 + 1) * ceil((segment_size + SEGMENT_BORDER) * (4 * error_rate - .3)) : ceil((segment_size + SEGMENT_BORDER) * 4 * error_rate) * ceil((segment_size + SEGMENT_BORDER) * 4 * error_rate + 1) / 2),
 		d_path_index(ceil((segment_size + SEGMENT_BORDER) * 4 * error_rate)),
 		aln_path(ceil((segment_size + SEGMENT_BORDER) * 4 * error_rate) * 4) { }
 	~DiffRunningData() { }

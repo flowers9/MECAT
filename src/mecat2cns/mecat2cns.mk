@@ -20,6 +20,8 @@ SOURCES  := main.cpp \
 
 SRC_INCDIRS  := . libboost
 
+# make sure large files are okay (and off_t is 8 bytes);
+# requires c++11 or higher for <mutex> headers
 TGT_CXXFLAGS := -D _FILE_OFFSET_BITS=64 -std=c++11
 TGT_LDFLAGS  := -L${TARGET_DIR}
 TGT_LDLIBS   := -lmecat

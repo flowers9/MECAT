@@ -1,13 +1,15 @@
 #ifndef _READS_CORRECTION_AUX_H
 #define _READS_CORRECTION_AUX_H
 
-#include <vector>	// vector<>
-#include <unistd.h>
 #include <mutex>	// lock_guard<>, mutex
+#include <string>	// string
+#include <unistd.h>
+#include <vector>	// vector<>
 
 #include "dw.h"		// DiffRunningData, M5Record
 #include "packed_db.h"
 #include "options.h"
+#include "../common/defs.h"	// GAP
 
 struct CnsTableItem {
 	char base;
@@ -19,7 +21,6 @@ struct CnsTableItem {
 
 struct MappingRange {
 	int start, end;
-	explicit MappingRange() : start(0), end(0) { }
 	explicit MappingRange(const int s, const int e) : start(s), end(e) { }
 };
 
@@ -134,6 +135,32 @@ struct CmpExtensionCandidateCompressedBySidAndScore {
 			return a.qdir() < b.qdir();
 		}
 	}
+};
+
+// like CmpExtensionCandidateCompressedBySidAndScore, but use a new ordering
+// (don't store actual vector in this class, as it gets copied a lot by sort())
+
+class CmpExtensionCandidateCompressedNewOrder {
+    public:
+	explicit CmpExtensionCandidateCompressedNewOrder(const std::vector<idx_t>& order) : order_(order) { }
+	bool operator()(const ExtensionCandidateCompressed& a, const ExtensionCandidateCompressed& b) {
+		if (a.sid != b.sid) {			// primary sort
+							// for splitting up in allocate_ecs()
+			return order_[a.sid] < order_[b.sid];
+		} else if (a.score != b.score) {	// secondary sort
+			return b.score < a.score;	// process best ones first
+		} else if (a.qid != b.qid) {		// group ties by qid
+			return a.qid < b.qid;		// (doesn't matter if new or old)
+		} else if (a.qext() != b.qext()) {
+			return a.qext() < b.qext();
+		} else if (a.sext != b.sext) {		// tertiary sort
+			return a.sext < b.sext;		// make sorting consistent
+		} else {
+			return a.qdir() < b.qdir();
+		}
+	}
+    private:
+	const std::vector<idx_t>& order_;	// [read_id] = new_order
 };
 
 class ConsensusPerThreadData {

@@ -54,34 +54,6 @@ struct CmpExtensionCandidateCompressedBySid {
 	}
 };
 
-// do full ordering, but using new rid instead of old
-// (we cannot store anything in this class, as it gets copied a lot)
-
-class OrderCmp {
-    public:
-	explicit OrderCmp(const std::vector<idx_t>& order) : order_(order) { }
-	~OrderCmp() { }
-	// same as CmpExtensionCandidateCompressedBySidAndScore, but with new order
-	bool operator()(const ExtensionCandidateCompressed& a, const ExtensionCandidateCompressed& b) {
-		if (a.sid != b.sid) {			// primary sort
-							// for splitting up in allocate_ecs()
-			return order_[a.sid] < order_[b.sid];
-		} else if (a.score != b.score) {	// secondary sort
-			return b.score < a.score;       // process best ones first
-		} else if (a.qid != b.qid) {		// group ties by qid
-			return a.qid < b.qid;		// (doesn't matter if new or old)
-		} else if (a.qext() != b.qext()) {
-			return a.qext() < b.qext();
-		} else if (a.sext != b.sext) {		// tertiary sort
-			return a.sext < b.sext;		// make sorting consistent
-		} else {
-			return a.qdir() < b.qdir();
-		}
-	}
-    private:
-	const std::vector<idx_t>& order_;	// [read_id] = order
-};
-
 class EC_Index {	// offset into ec_list (and number of ecs) for each read id
     public:
 	idx_t offset, count;
@@ -153,7 +125,7 @@ static void reorder_candidates(ExtensionCandidateCompressed* const ec_list, idx_
 	for (size_t i(0); i != new_order.size(); ++i) {
 		rid_to_order[new_order[i]] = i;
 	}
-	OrderCmp new_rid_order_cmp(rid_to_order);
+	CmpExtensionCandidateCompressedNewOrder new_rid_order_cmp(rid_to_order);
 	std::sort(ec_list, ec_list + nec, new_rid_order_cmp);
 	nec = total_ec;
 }

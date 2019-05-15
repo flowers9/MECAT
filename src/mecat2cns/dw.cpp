@@ -29,7 +29,7 @@ static void fill_align(const std::string& query, const int q_offset, const std::
 			const int new_y(aln_path[aln_idx].y);
 			const int dx(new_x - current_x);
 			const int dy(new_y - current_y);
-			if (dx && dy) {		// apparently, dx always equals dy in this case
+			if (dx && dy) {		// dx always equals dy in this case
 				std::copy(query_p + current_x, query_p + new_x, &align.q_aln_str[align.current_size]);
 				std::copy(target_p + current_y, target_p + new_y, &align.t_aln_str[align.current_size]);
 				align.current_size += dx;
@@ -53,7 +53,7 @@ static void fill_align(const std::string& query, const int q_offset, const std::
 			const int new_y(aln_path[aln_idx].y);
 			const int dx(new_x - current_x);
 			const int dy(new_y - current_y);
-			if (dx && dy) {		// apparently, dx always equals dy in this case
+			if (dx && dy) {		// dx always equals dy in this case
 				align.current_size += dx;
 				const int offset(align.q_aln_str.size() - align.current_size);
 				std::copy(query_p - new_x, query_p - current_x, &align.q_aln_str[offset]);
