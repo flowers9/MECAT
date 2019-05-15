@@ -76,8 +76,10 @@ static void fill_align(const std::string& query, const int q_offset, const std::
 }
 
 static int Align(const int extend_size, const std::string& query, const int q_offset, const std::string& target, const int t_offset, Alignment& align, std::vector<int>& q_extent, std::vector<int>& combined_match_length, std::vector<DPathData>& d_path, std::vector<DPathIndex>& d_path_index, std::vector<PathPoint>& aln_path, const int extend_forward, const double error_rate) {
+	// if these constants are changed, DiffRunningData buffer sizes
+	// in dw.h should also be changed
 	const int k_offset(extend_size * 4 * error_rate);
-	const int band_tolerance(extend_size / 10 * 3);
+	const int band_tolerance(extend_size * 3 / 10);
 	const int max_band_size(band_tolerance * 2 + 1);
 	int d_path_idx(0), best_combined_match_length(0), min_k(0), max_k(0);
 	q_extent[k_offset + 1] = 0;	// initialize starting point
