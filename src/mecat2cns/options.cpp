@@ -7,6 +7,8 @@
 #include <sstream>
 #include <string>
 
+#include "../common/defs.h"	// TECH_NANOPORE, TECH_PACBIO
+
 static int input_type_pacbio		= 1;
 static int num_threads_pacbio		= 1;
 static double mapping_ratio_pacbio	= 0.6;
@@ -30,7 +32,7 @@ static double error_rate_nanopore	= .2;
 static int default_tech = TECH_PACBIO;
 static int num_partition_files = 0;
 static int full_reads = 0;
-static idx_t read_buffer_size = 0;
+static size_t read_buffer_size = 0;
 static idx_t batch_size = idx_t(1) << 33;	// 8 GB
 
 static const char input_type_n    = 'i';
@@ -52,9 +54,9 @@ static const char full_reads_n    = 'F';
 static const char read_buffer_size_n = 'b';
 
 // convert number with potential suffix (k, m, g)
-static idx_t convert_integer(const std::string& s) {
+static size_t convert_integer(const std::string& s) {
 	std::istringstream x(s);
-	idx_t value;
+	size_t value;
 	x >> value;
 	const size_t i(s.find_first_not_of("0123456789"));
 	if (i != std::string::npos) {
@@ -95,7 +97,7 @@ void print_nanopore_default_options()
 
 // given options, recreate arguments from the command line
 std::string
-make_options(const ConsensusOptions& options)
+make_options(const ReadsCorrectionOptions& options)
 {
         std::ostringstream cmd;
 	cmd << " -" << input_type_n << " " << (options.input_type == INPUT_TYPE_CAN ? 0 : 1);
@@ -176,8 +178,8 @@ void print_usage(const char* prog) {
 	print_nanopore_default_options();
 }
 
-ConsensusOptions init_consensus_options(const int tech) {
-	ConsensusOptions t;
+ReadsCorrectionOptions init_consensus_options(const int tech) {
+	ReadsCorrectionOptions t;
 	t.m4                    = NULL;
 	t.reads                 = NULL;
 	t.corrected_reads       = NULL;
@@ -238,7 +240,7 @@ int detect_tech(int argc, char* argv[]) {
 	return t;
 }
 
-int parse_arguments(int argc, char* argv[], ConsensusOptions& t) {
+int parse_arguments(int argc, char* argv[], ReadsCorrectionOptions& t) {
 	bool parse_success(true);
 	const int tech(detect_tech(argc, argv));
 	if (tech == -1) {
@@ -316,10 +318,6 @@ int parse_arguments(int argc, char* argv[], ConsensusOptions& t) {
 				break;
 		}
 	}
-	if (t.num_threads < 0) {
-		std::cerr << "cpu threads must be greater than 0\n";
-		parse_success = false;
-	}
 	if (t.batch_size == 0) {
 		std::cerr << "batch size must be greater than 0\n";
 		parse_success = false;
@@ -328,24 +326,8 @@ int parse_arguments(int argc, char* argv[], ConsensusOptions& t) {
 		std::cerr << "mapping ratio must be >= 0.0\n";
 		parse_success = false;
 	}
-	if (t.min_cov < 0) {
-		std::cerr << "coverage must be >= 0\n";
-		parse_success = false;
-	}
 	if (t.min_size < 0) {
 		std::cerr << "sequence size must be >= 0\n";
-		parse_success = false;
-	}
-	if (t.reads_to_correct < 0) {
-		std::cerr << "number of reads must be >= 0\n";
-		parse_success = false;
-	}
-	if (t.grid_start_delay < 0) {
-		std::cerr << "grid start delay must be >= 0\n";
-		parse_success = false;
-	}
-	if (t.read_buffer_size < 0) {
-		std::cerr << "read buffer size must be greater than 0\n";
 		parse_success = false;
 	}
 	if (argc - optind < 3) {
@@ -358,7 +340,7 @@ int parse_arguments(int argc, char* argv[], ConsensusOptions& t) {
 }
 
 void
-print_options(ConsensusOptions& t)
+print_options(ReadsCorrectionOptions& t)
 {
 	std::cout << "input_type:\t"	<< t.input_type << "\n";
 	if (t.m4) std::cout << "reads\t" << t.m4 << "\n";

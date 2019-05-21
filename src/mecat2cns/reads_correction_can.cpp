@@ -9,6 +9,7 @@
 #include "mecat_correction.h"
 #include "overlaps_partition.h"
 #include "overlaps_store.h"
+#include "options.h"		// ReadsCorrectionOptions
 
 static void* reads_correction_func_can(void* const arg) {
 	ConsensusThreadData& data(*(static_cast<ConsensusThreadData*>(arg)));

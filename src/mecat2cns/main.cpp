@@ -1,7 +1,7 @@
 #include "reads_correction_can.h"
 #include "reads_correction_m4.h"
 #include "overlaps_partition.h"
-#include "options.h"
+#include "options.h"			// ReadsCorrectionOptions
 #include "packed_db.h"			// PackedDB
 
 #include <fcntl.h>	// S_IRUSR, S_IXUSR

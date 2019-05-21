@@ -88,7 +88,7 @@ void generate_partition_index_file_name(const std::string& input_file_name, std:
 	ret = input_file_name + ".partition_files";
 }
 
-void generate_partition_file_name(const std::string& input_file_name, const idx_t part, std::string& ret) {
+static void generate_partition_file_name(const std::string& input_file_name, const int part, std::string& ret) {
 	std::ostringstream os;
 	os << part;
 	ret = input_file_name + ".part" + os.str();
@@ -110,7 +110,7 @@ void partition_candidates(const std::string& input, const std::string& pac_prefi
 	std::vector<idx_t> read_sizes;
 	PackedDB::read_sizes(pac_prefix, read_sizes);
 	PartitionResultsWriter<ExtensionCandidateCompressed> prw(num_files);
-	idx_t i(0);
+	int i(0);
 	off_t input_pos;
 	int is_restart(prw.restart(input, generate_partition_file_name, "partition.done", i, input_pos));
 	std::string idx_file_name;
@@ -195,7 +195,7 @@ void partition_m4records(const char* const m4_file_name, const double min_cov_ra
 	M4Record m4, nm4;
 	ExtensionCandidate ec;
 	PartitionResultsWriter<ExtensionCandidate> prw(num_files);
-	for (idx_t i(0); i < num_batches; i += prw.kNumFiles) {
+	for (int i(0); i < num_batches; i += prw.kNumFiles) {
 		const idx_t sfid(i);
 		const idx_t efid(std::min(sfid + prw.kNumFiles, num_batches));
 		const int nf(efid - sfid);

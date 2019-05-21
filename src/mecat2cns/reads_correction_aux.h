@@ -9,15 +9,25 @@
 #include "dw.h"		// DiffRunningData, M5Record
 #include "packed_db.h"
 #include "options.h"
+#include "../common/alignment.h"	// ExtensionCandidate, ExtensionCandidateCompressed
 #include "../common/defs.h"	// GAP
+
+#define MAX_CNS_OVLPS 100
+
+// 1k seems to work a bit better than 10k - perhaps less time waiting for
+// another thread to finish writing?
+#define MAX_CNS_RESULTS 1000
+
+struct CnsResult {
+	idx_t id, range[2];
+	std::string seq;
+};
 
 struct CnsTableItem {
 	char base;
 	uint1 mat_cnt, ins_cnt, del_cnt;
 	explicit CnsTableItem() : base('N'), mat_cnt(0), ins_cnt(0), del_cnt(0) { }
 };
-
-#define MAX_CNS_OVLPS 100
 
 struct MappingRange {
 	int start, end;
@@ -87,10 +97,6 @@ class CnsAlns {
     private:
 	std::vector<CnsAln> cns_alns_;
 };
-
-// 1k seems to work a bit better than 10k - perhaps less time waiting for
-// another thread to finish writing?
-#define MAX_CNS_RESULTS 1000
 
 struct CmpExtensionCandidateBySidAndScore {
 	bool operator()(const ExtensionCandidate& a, const ExtensionCandidate& b) {

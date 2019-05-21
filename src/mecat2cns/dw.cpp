@@ -81,9 +81,9 @@ static int Align(const int extend_size, const std::string& query, const int q_of
 	const int k_offset(extend_size * 4 * error_rate);
 	const int band_tolerance(extend_size * 3 / 10);
 	const int max_band_size(band_tolerance * 2 + 1);
-	int d_path_idx(0), best_combined_match_length(0), min_k(0), max_k(0);
+	int d_path_idx(0), best_combined_match_length(0), best(-1), best_score(-k_offset);
 	q_extent[k_offset + 1] = 0;	// initialize starting point
-	for (int d(0); d != k_offset && max_k - min_k < max_band_size; ++d) {
+	for (int d(0), min_k(0), max_k(0); d != k_offset && max_k - min_k < max_band_size; ++d) {
 		// starting point of each "d" set of entries
 		d_path_index[d].set(d_path_idx, min_k);
 		for (int k(min_k); k <= max_k; k += 2) {
@@ -105,17 +105,22 @@ static int Align(const int extend_size, const std::string& query, const int q_of
 				for (; q_pos < extend_size && t_pos < extend_size && query[q_offset - q_pos] == target[t_offset - t_pos]; ++q_pos, ++t_pos) { }
 			}
 			d_path[d_path_idx].set(q_start, t_start, q_pos, t_pos, pre_k);
-			// see if we got as much as we can
-			if (q_pos == extend_size || t_pos == extend_size) {
-				fill_align(query, q_offset, target, t_offset, align, d_path, &d_path[d_path_idx], d_path_index, d, aln_path, extend_forward);
-				return 1;
+			const int score(q_pos + t_pos);
+			// see if we reached the end
+			if ((q_pos == extend_size || t_pos == extend_size) && best_score < score) {
+				best_score = score;
+				best = d_path_idx;
 			}
 			++d_path_idx;
 			q_extent[k_offset + k] = q_pos;
-			combined_match_length[k_offset + k] = q_pos + t_pos;
-			if (best_combined_match_length < q_pos + t_pos) {
-				best_combined_match_length = q_pos + t_pos;
+			combined_match_length[k_offset + k] = score;
+			if (best_combined_match_length < score) {
+				best_combined_match_length = score;
 			}
+		}
+		if (best != -1) {	// finished alignment
+			fill_align(query, q_offset, target, t_offset, align, d_path, &d_path[best], d_path_index, d, aln_path, extend_forward);
+			return 1;
 		}
 		// shift ends to one outside "good" band
 		const int cutoff(best_combined_match_length - band_tolerance);
@@ -124,7 +129,7 @@ static int Align(const int extend_size, const std::string& query, const int q_of
 		for (; combined_match_length[k_offset + max_k] < cutoff; max_k -= 2) { }
 		++max_k;
 	}
-	return 0;
+	return 0;	// couldn't complete alignemnt
 }
 
 static void dw_in_one_direction(const std::string& query, const int q_offset, const std::string& target, const int t_offset, std::vector<int>& U, std::vector<int>& V, Alignment& align, std::vector<DPathData>& d_path, std::vector<DPathIndex>& d_path_index, std::vector<PathPoint>& aln_path, const int segment_size, OutputStore& result, const int extend_forward, const double error_rate) {

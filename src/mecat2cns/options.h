@@ -1,14 +1,12 @@
 #ifndef OPTIONS_H
 #define OPTIONS_H
 
-#include "../common/defs.h"
-#include <string>
+#include <string>	// string
 
 #define INPUT_TYPE_CAN 	0
 #define INPUT_TYPE_M4	1
 
-struct ConsensusOptions
-{
+struct ReadsCorrectionOptions {
     int         input_type;
     const char* m4;
     const char* reads;
@@ -16,11 +14,11 @@ struct ConsensusOptions
     const char* grid_options;
     const char* grid_options_split;
     int         num_threads;
-    idx_t       batch_size;
+    int		batch_size;
     double      min_mapping_ratio;
     int         min_align_size;
     int         min_cov;
-    idx_t       min_size;
+    int		min_size;
     bool        print_usage_info;
     int         tech;
     int         num_partition_files;
@@ -28,22 +26,16 @@ struct ConsensusOptions
     int         reads_to_correct;
     int		grid_start_delay;
     int		full_reads;
-    idx_t	read_buffer_size;
+    size_t	read_buffer_size;
     double	error_rate;	// .15 for pacbio, .2 for nanopore
 };
 
-void
-print_usage(const char* prog);
+void print_usage(const char* prog);
 
-int
-parse_arguments(int argc, char* argv[], ConsensusOptions& t);
+int parse_arguments(int argc, char* argv[], ReadsCorrectionOptions& t);
 
-void
-print_options(ConsensusOptions& t);
+void print_options(ReadsCorrectionOptions& t);
 
-std::string
-make_options(const ConsensusOptions& t);
-
-typedef ConsensusOptions ReadsCorrectionOptions;
+std::string make_options(const ReadsCorrectionOptions& t);
 
 #endif // OPTIONS_H

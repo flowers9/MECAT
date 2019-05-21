@@ -10,7 +10,7 @@
 
 #include "../common/defs.h"
 #include "../common/fasta_reader.h"
-#include "../common/alignment.h"
+#include "../common/alignment.h"	// ExtensionCandidateCompressed
 
 void PackedDB::add_one_seq(const Sequence& seq) {
 	seq_idx.push_back(SeqIndex(-1, db_size, seq.size()));

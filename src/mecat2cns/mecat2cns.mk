@@ -7,7 +7,6 @@ endif
 
 TARGET   := mecat2cns
 SOURCES  := main.cpp \
-	argument.cpp \
 	dw.cpp \
 	MECAT_AlnGraphBoost.C \
 	mecat_correction.cpp \

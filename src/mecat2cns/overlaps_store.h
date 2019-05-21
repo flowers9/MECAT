@@ -13,7 +13,7 @@
 
 template <class T> class PartitionResultsWriter {
     public:
-	typedef void (*file_name_generator)(const std::string& prefix, idx_t id, std::string& name);
+	typedef void (*file_name_generator)(const std::string& prefix, int id, std::string& name);
     public:
 	const int kNumFiles;	// effective open file limit
 	int kStoreSize;
@@ -88,7 +88,7 @@ template <class T> class PartitionResultsWriter {
 		}
 		return 0;
 	}
-	int restart(const std::string& prefix, file_name_generator fng, const std::string& done_file, idx_t& sfid, off_t& input_pos) {
+	int restart(const std::string& prefix, file_name_generator fng, const std::string& done_file, int& sfid, off_t& input_pos) {
 		CloseFiles();
 		done_file_ = done_file;
 		ckpt_file_ = done_file_ + ".ckpt";
@@ -156,7 +156,7 @@ template <class T> class PartitionResultsWriter {
 		return total;
 	}
     private:
-	idx_t batch_start_ ;
+	int batch_start_ ;
 	time_t next_checkpoint_time_;
 	std::string done_file_;
 	std::string ckpt_file_;

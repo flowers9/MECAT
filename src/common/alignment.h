@@ -226,9 +226,4 @@ m4_to_candidate(const M4Record& m4, ExtensionCandidate& ec)
 	ec.score = m4vscore(m4);
 }
 
-struct CnsResult {
-	idx_t id, range[2];
-	std::string seq;
-};
-
 #endif // ALIGNMENT_H

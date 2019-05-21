@@ -2,12 +2,9 @@
 #define PACKED_DB_H
 
 #include <fstream>	// ifstream
-#include <set>		// set<>
 #include <string>	// string
-#include <utility>	// pair<>
 #include <vector>	// vector<>
 
-#include "../common/defs.h"
 #include "../common/sequence.h"		// Sequence
 #include "../common/alignment.h"	// ExtensionCandidateCompressed
 
@@ -58,14 +55,14 @@ class PackedDB {
 		return max_read_size_;
 	}
     private:
-	static void set_char(std::vector<uint1>& p, const idx_t idx, const u1_t c) {
+	static void set_char(std::vector<uint1>& p, const idx_t idx, const uint1 c) {
 		p[idx >> 2] |= c << ((~idx & 3) << 1);
 	}
-	void set_char(const idx_t idx, const u1_t c) {
+	void set_char(const idx_t idx, const uint1 c) {
 		// use ~x instead of 3 - x for speed, since we have to & 3 anyway
 		pac[idx >> 2] |= c << ((~idx & 3) << 1);
 	}
-	u1_t get_char(const idx_t idx) const {
+	uint1 get_char(const idx_t idx) const {
 		return pac[idx >> 2] >> ((~idx & 3) << 1) & 3;
 	}
 	void add_one_seq(const Sequence& seq);
@@ -75,7 +72,7 @@ class PackedDB {
 		max_db_size = db_size = 0;
 	}
     private:
-	u1_t* pac;
+	uint1* pac;
 	idx_t db_size, max_db_size, max_read_size_;
 	std::vector<SeqIndex> seq_idx;
 	std::ifstream pstream;
