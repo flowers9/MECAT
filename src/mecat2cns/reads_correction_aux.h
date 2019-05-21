@@ -1,16 +1,18 @@
 #ifndef _READS_CORRECTION_AUX_H
 #define _READS_CORRECTION_AUX_H
 
+#include <fstream>	// ifstream, ofstream
+#include <iostream>	// ostream
 #include <mutex>	// lock_guard<>, mutex
 #include <string>	// string
-#include <unistd.h>
+#include <unistd.h>	// F_OK, access(), rename()
 #include <vector>	// vector<>
 
-#include "dw.h"		// DiffRunningData, M5Record
-#include "packed_db.h"
-#include "options.h"
 #include "../common/alignment.h"	// ExtensionCandidate, ExtensionCandidateCompressed
-#include "../common/defs.h"	// GAP
+#include "../common/defs.h"	// GAP, idx_t, r_assert()
+#include "dw.h"		// DiffRunningData, ERROR(), LOG(), M5Record
+#include "options.h"	// ReadsCorrectionOptions
+#include "packed_db.h"	// PackedDB
 
 #define MAX_CNS_OVLPS 100
 
@@ -44,7 +46,7 @@ class CnsAln : public MappingRange {
 			return 0;
 		}
 		sb_out = std::max(start, sb);
-		while (start < sb && aln_idx_ < aln_size) {
+		while (start < sb && aln_idx_ != aln_size) {
 			if (saln_[++aln_idx_] != GAP) {
 				++start;
 			}
@@ -52,7 +54,7 @@ class CnsAln : public MappingRange {
 		// should we test for start < sb, and return 0 if so,
 		// rather than returning the last basepair of the alignment?
 		const int aln_start(aln_idx_);
-		while (start < se && aln_idx_ < aln_size) {
+		while (start < se && aln_idx_ != aln_size) {
 			if (saln_[++aln_idx_] != GAP) {
 				++start;
 			}
@@ -216,8 +218,7 @@ class ConsensusThreadData {
 	~ConsensusThreadData() { }
 	int get_thread_id() {
 		std::lock_guard<std::mutex> lock(id_lock_);
-		const int tid(++last_thread_id_);
-		return tid;
+		return ++last_thread_id_;
 	}
 	void reset_threads() {
 		last_thread_id_ = -1;
@@ -229,7 +230,7 @@ class ConsensusThreadData {
 	}
 	void write_buffer(const int tid, const idx_t i) {
 		ConsensusPerThreadData& pdata(data[tid]);
-		{
+		{						// scoping for lock_guard
 			std::vector<CnsResult>::const_iterator a(pdata.cns_results.begin());
 			const std::vector<CnsResult>::const_iterator end_a(pdata.cns_results.end());
 			std::lock_guard<std::mutex> lock(out_lock);

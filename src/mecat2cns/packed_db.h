@@ -3,10 +3,12 @@
 
 #include <fstream>	// ifstream
 #include <string>	// string
+#include <unistd.h>	// off_t
 #include <vector>	// vector<>
 
-#include "../common/sequence.h"		// Sequence
 #include "../common/alignment.h"	// ExtensionCandidateCompressed
+#include "../common/defs.h"		// idx_t
+#include "../common/sequence.h"		// Sequence
 
 class PackedDB {
     private:
@@ -17,9 +19,9 @@ class PackedDB {
 		explicit SeqIndex(const off_t i, const idx_t j, const idx_t k) : file_offset(i), memory_offset(j), size(k) { }
 	};
     public:
-	explicit PackedDB() : pac(0), db_size(0), max_db_size(0), max_read_size_(0) { }
+	explicit PackedDB() : pac_(0), db_size(0), max_db_size(0), max_read_size_(0) { }
 	~PackedDB() {
-		delete[] pac;
+		delete[] pac_;
 	}
 	// returns number of reads
 	static size_t convert_fasta_to_db(const std::string& fasta, const std::string& output_prefix, idx_t min_size);
@@ -60,19 +62,19 @@ class PackedDB {
 	}
 	void set_char(const idx_t idx, const uint1 c) {
 		// use ~x instead of 3 - x for speed, since we have to & 3 anyway
-		pac[idx >> 2] |= c << ((~idx & 3) << 1);
+		pac_[idx >> 2] |= c << ((~idx & 3) << 1);
 	}
 	uint1 get_char(const idx_t idx) const {
-		return pac[idx >> 2] >> ((~idx & 3) << 1) & 3;
+		return pac_[idx >> 2] >> ((~idx & 3) << 1) & 3;
 	}
 	void add_one_seq(const Sequence& seq);
 	void destroy() {
-		delete[] pac;
+		delete[] pac_;
 		seq_idx.clear();
 		max_db_size = db_size = 0;
 	}
     private:
-	uint1* pac;
+	uint1* pac_;
 	idx_t db_size, max_db_size, max_read_size_;
 	std::vector<SeqIndex> seq_idx;
 	std::ifstream pstream;

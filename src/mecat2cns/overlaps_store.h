@@ -1,15 +1,14 @@
 #ifndef _OVERLAPS_STORE_H
 #define _OVERLAPS_STORE_H
 
-#include <fstream>
-#include <limits>
-#include <string>
-#include <vector>
-#include <unistd.h>
-#include <iostream>
+#include <fstream>	// ifstream, ofstream, streampos, streamsize
+#include <string>	// string
+#include <time.h>	// time(), time_t
+#include <unistd.h>	// _SC_OPEN_MAX, F_OK, access(), off_t, rename(), sysconf(), unlink()
+#include <vector>	// vector<>
 
-#include "../common/defs.h"
-#include "../common/pod_darr.h"
+#include "../common/defs.h"	// ERROR(), LOG(), close_fstream(), idx_t, open_fstream()
+#include "../common/pod_darr.h"	// PODArray<>
 
 template <class T> class PartitionResultsWriter {
     public:
@@ -45,7 +44,7 @@ template <class T> class PartitionResultsWriter {
 		if (num_open_files == 0) {
 			return;
 		}
-		for (int i(0); i < num_open_files; ++i) {	// flush buffers
+		for (int i(0); i != num_open_files; ++i) {	// flush buffers
 			if (results[i].size()) {
 				write_buffer_to_disk(i);
 			}
@@ -102,7 +101,7 @@ template <class T> class PartitionResultsWriter {
 			ERROR("Read error while restoring checkpoint from %s", ckpt_file_.c_str());
 		}
 		allocate_data(prefix, fng, 1);
-		for (int i(0); i < num_open_files; ++i) {
+		for (int i(0); i != num_open_files; ++i) {
 			off_t file_pos;
 			in >> file_pos >> counts[i];
 			if (!in) {
@@ -128,7 +127,7 @@ template <class T> class PartitionResultsWriter {
 			return;
 		}
 		// flush buffers
-		for (int i(0); i < num_open_files; ++i) {
+		for (int i(0); i != num_open_files; ++i) {
 			if (results[i].size()) {
 				write_buffer_to_disk(i);
 				results[i].clear();
@@ -169,7 +168,7 @@ template <class T> class PartitionResultsWriter {
 		file_names.assign(num_open_files, "");
 		counts.assign(num_open_files, 0);
 		files = new std::ofstream[num_open_files];
-		for (int i(0); i < num_open_files; ++i) {
+		for (int i(0); i != num_open_files; ++i) {
 			fng(prefix, i + batch_start_, file_names[i]);
 			const std::string tmp_file(file_names[i] + ".tmp");
 			if (is_restart) {
@@ -210,7 +209,6 @@ template <class T> T* load_partition_data(const char* const path, idx_t& num_res
 	in.seekg(0, std::ios::beg);
 	num_results = fs / sizeof(T);
 	T* const arr(new T[num_results]);
-std::cerr << "load_partition_data: allocating for " << num_results << " objects of size " << sizeof(T) << "\n";
 	in.read((char*)arr, fs);	// can't use static_cast<>
 	if (!in) {
 		ERROR("Error reading partition data: %s", path);
