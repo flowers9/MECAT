@@ -81,7 +81,8 @@ static int Align(const int extend_size, const std::string& query, const int q_of
 	const int k_offset(extend_size * 4 * error_rate);
 	const int band_tolerance(extend_size * 3 / 10);
 	const int max_band_size(band_tolerance * 2 + 1);
-	int d_path_idx(0), best_combined_match_length(0), best(-1), best_score(-k_offset);
+	int d_path_idx(0), best_combined_match_length(0);
+	int best(-1), best_score(-k_offset);
 	q_extent[k_offset + 1] = 0;	// initialize starting point
 	for (int d(0), min_k(0), max_k(0); d != k_offset && max_k - min_k < max_band_size; ++d) {
 		// starting point of each "d" set of entries
@@ -105,8 +106,8 @@ static int Align(const int extend_size, const std::string& query, const int q_of
 				for (; q_pos < extend_size && t_pos < extend_size && query[q_offset - q_pos] == target[t_offset - t_pos]; ++q_pos, ++t_pos) { }
 			}
 			d_path[d_path_idx].set(q_start, t_start, q_pos, t_pos, pre_k);
-			const int score(q_pos + t_pos);
 			// see if we reached the end
+			const int score(q_pos + t_pos);
 			if ((q_pos == extend_size || t_pos == extend_size) && best_score < score) {
 				best_score = score;
 				best = d_path_idx;
