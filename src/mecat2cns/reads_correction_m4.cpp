@@ -1,9 +1,11 @@
 #include "reads_correction_m4.h"
 
 #include <algorithm>	// sort()
-#include <string>	// string
+#include <cassert>	// assert()
 #include <sstream>
+#include <string>	// string
 
+#include "../common/defs.h"	// TECH_PACBIO
 #include "mecat_correction.h"
 #include "overlaps_partition.h"
 #include "overlaps_store.h"
@@ -88,7 +90,7 @@ static int reads_correction_m4_p(ReadsCorrectionOptions& rco, std::vector<std::s
 	sprintf(process_info, "processing %s", p.c_str());
 	DynamicTimer dtimer(process_info);
 	consensus_one_partition_m4(p.c_str(), rco, reads, out);
-	assert(rename(working_file.c_str(), results_file.c_str()) == 0);
+	assert(rename(working_file.c_str(), results_file.c_str()));
 	return 0;
 }
 

@@ -4,6 +4,7 @@
 #include "options.h"			// ReadsCorrectionOptions, make_options()
 #include "packed_db.h"			// PackedDB
 
+#include <cassert>	// assert()
 #include <fcntl.h>	// S_IRUSR, S_IXUSR
 #include <list>		// list<>
 #include <sstream>	// ostringstream
@@ -46,7 +47,7 @@ static void grid_start(const char* const prog, const ReadsCorrectionOptions &opt
 	chmod(script_file.c_str(), S_IRUSR | S_IXUSR);
 	std::string cmd(i == -1 && options.grid_options_split ? options.grid_options_split : options.grid_options);
 	cmd += " " + name + " " + script_file;
-	assert(system(cmd.c_str()) == 0);
+	assert(system(cmd.c_str()));
 }
 
 // exit files get modified during loop

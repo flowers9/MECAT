@@ -1,5 +1,6 @@
 #include "overlaps_partition.h"
 
+#include <cassert>	// assert()
 #include <fstream>
 #include <limits>
 #include <set>
@@ -143,15 +144,15 @@ void partition_candidates(const std::string& input, const std::string& pac_prefi
 				continue;
 			}
 			// make sure values match before tossing the values
-			r_assert(ec.ssize == read_sizes[ec.sid] && ec.qsize == read_sizes[ec.qid]);
+			assert(ec.ssize == read_sizes[ec.sid] && ec.qsize == read_sizes[ec.qid]);
 			// as variable sizes may be different, make sure the ones
 			// we read in can be safely stored
-			r_assert(ec.sid <= ExtensionCandidateCompressed::max_value);
-			r_assert(ec.qid <= ExtensionCandidateCompressed::max_value);
-			r_assert(ec.sext <= ExtensionCandidateCompressed::max_value);
+			assert(ec.sid <= ExtensionCandidateCompressed::max_value);
+			assert(ec.qid <= ExtensionCandidateCompressed::max_value);
+			assert(ec.sext <= ExtensionCandidateCompressed::max_value);
 			// qext is one bit smaller than the others
-			r_assert(ec.qext <= ExtensionCandidateCompressed::max_qext);
-			r_assert(ec.score <= ExtensionCandidateCompressed::max_value);
+			assert(ec.qext <= ExtensionCandidateCompressed::max_qext);
+			assert(ec.score <= ExtensionCandidateCompressed::max_value);
 			if (L <= ec.sid && ec.sid < R) {
 				nec.set(ec);
 				if (prw.WriteOneResult((nec.sid - L) / reads_per_batch, nec.sid, nec)) {

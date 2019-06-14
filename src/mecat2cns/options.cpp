@@ -213,7 +213,7 @@ ReadsCorrectionOptions init_consensus_options(const int tech) {
 
 int detect_tech(int argc, char* argv[]) {
 	int t = default_tech;
-	char tech_nstr[64]; tech_nstr[0] = '-'; tech_nstr[1] = tech_n; tech_nstr[2] = '\0';
+	const char tech_nstr[] = {'-', tech_n, 0};
 	for (int i = 0; i < argc; ++i) {
 		if (strcmp(tech_nstr, argv[i]) == 0) {
 			if (i + 1 == argc) {
@@ -334,6 +334,8 @@ int parse_arguments(int argc, char* argv[], ReadsCorrectionOptions& t) {
 	return parse_success;
 }
 
+// not in use at the moment
+#if 0
 static void print_options(ReadsCorrectionOptions& t) {
 	std::cout << "input_type:\t"	<< t.input_type << "\n";
 	if (t.m4) std::cout << "reads\t" << t.m4 << "\n";
@@ -352,3 +354,4 @@ static void print_options(ReadsCorrectionOptions& t) {
 	std::cout << "partition files:\t" << t.num_partition_files << "\n";
 	std::cout << "tech:\t" << t.tech << "\n";
 }
+#endif

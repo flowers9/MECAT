@@ -1,33 +1,35 @@
 #ifndef _READS_CORRECTION_AUX_H
 #define _READS_CORRECTION_AUX_H
 
+#include <cassert>	// assert()
 #include <fstream>	// ifstream, ofstream
 #include <iostream>	// ostream
 #include <mutex>	// lock_guard<>, mutex
 #include <string>	// string
+#include <stdint.h>	// int64_t, uint8_t
 #include <unistd.h>	// F_OK, access(), rename()
 #include <vector>	// vector<>
 
 #include "../common/alignment.h"	// ExtensionCandidate, ExtensionCandidateCompressed
-#include "../common/defs.h"	// GAP, idx_t, r_assert()
 #include "dw.h"		// DiffRunningData, ERROR(), LOG(), M5Record
 #include "options.h"	// ReadsCorrectionOptions
 #include "packed_db.h"	// PackedDB
 
 #define MAX_CNS_OVLPS 100
+#define GAP_CHAR '-'
 
 // 1k seems to work a bit better than 10k - perhaps less time waiting for
 // another thread to finish writing?
 #define MAX_CNS_RESULTS 1000
 
 struct CnsResult {
-	idx_t id, range[2];
+	int64_t id, range[2];
 	std::string seq;
 };
 
 struct CnsTableItem {
 	char base;
-	uint1 mat_cnt, ins_cnt, del_cnt;
+	uint8_t mat_cnt, ins_cnt, del_cnt;
 	explicit CnsTableItem() : base('N'), mat_cnt(0), ins_cnt(0), del_cnt(0) { }
 };
 
@@ -47,7 +49,7 @@ class CnsAln : public MappingRange {
 		}
 		sb_out = std::max(start, sb);
 		while (start < sb && aln_idx_ != aln_size) {
-			if (saln_[++aln_idx_] != GAP) {
+			if (saln_[++aln_idx_] != GAP_CHAR) {
 				++start;
 			}
 		}
@@ -55,7 +57,7 @@ class CnsAln : public MappingRange {
 		// rather than returning the last basepair of the alignment?
 		const int aln_start(aln_idx_);
 		while (start < se && aln_idx_ != aln_size) {
-			if (saln_[++aln_idx_] != GAP) {
+			if (saln_[++aln_idx_] != GAP_CHAR) {
 				++start;
 			}
 		}
@@ -90,7 +92,7 @@ class CnsAlns {
 		return cns_alns_.end();
 	}
 	void add_aln(const int soff, const int send, const std::string& qstr, const std::string& tstr) {
-		r_assert(qstr.size() == tstr.size());
+		assert(qstr.size() == tstr.size());
 		cns_alns_.push_back(CnsAln(soff, send, qstr, tstr));
 	}
 	void get_mapping_ranges(std::vector<MappingRange>& ranges) const {
@@ -150,7 +152,7 @@ struct CmpExtensionCandidateCompressedBySidAndScore {
 
 class CmpExtensionCandidateCompressedNewOrder {
     public:
-	explicit CmpExtensionCandidateCompressedNewOrder(const std::vector<idx_t>& order) : order_(order) { }
+	explicit CmpExtensionCandidateCompressedNewOrder(const std::vector<int64_t>& order) : order_(order) { }
 	bool operator()(const ExtensionCandidateCompressed& a, const ExtensionCandidateCompressed& b) {
 		if (a.sid != b.sid) {			// primary sort
 							// for splitting up in allocate_ecs()
@@ -168,7 +170,7 @@ class CmpExtensionCandidateCompressedNewOrder {
 		}
 	}
     private:
-	const std::vector<idx_t>& order_;	// [read_id] = new_order
+	const std::vector<int64_t>& order_;	// [read_id] = new_order
 };
 
 class ConsensusPerThreadData {
@@ -178,16 +180,16 @@ class ConsensusPerThreadData {
 	void* candidates;
 	// num_candidates, candidates initialized by allocate_ecs()
 	// next_candidate initialized by ConsensusThreadData::restart()
-	idx_t num_candidates, next_candidate;
+	int64_t num_candidates, next_candidate;
 	DiffRunningData drd;
 	M5Record m5;
 	CnsAlns cns_alns;
 	std::vector<CnsTableItem> cns_table;
-	std::vector<uint1> id_list;
+	std::vector<uint8_t> id_list;
 	std::vector<CnsResult> cns_results;
 	std::string query, target, qaln, saln;
     public:
-	explicit ConsensusPerThreadData(const double error_rate, const idx_t max_read_size) : drd(error_rate, max_read_size) {
+	explicit ConsensusPerThreadData(const double error_rate, const int64_t max_read_size) : drd(error_rate, max_read_size) {
 		// we'll definitely be seeing at least this much use,
 		// so might as well preallocate
 		cns_results.reserve(MAX_CNS_RESULTS);
@@ -201,7 +203,7 @@ class ConsensusThreadData {
 	PackedDB& reads;
 	std::ostream& out;
 	std::mutex out_lock;
-	idx_t ec_offset;
+	int64_t ec_offset;
 	std::vector<ConsensusPerThreadData> data;
     public:
 	ConsensusThreadData(ReadsCorrectionOptions& prco, PackedDB& r, std::ostream& output, const std::string& input_file_name) :
@@ -228,7 +230,7 @@ class ConsensusThreadData {
 			a->next_candidate = 0;
 		}
 	}
-	void write_buffer(const int tid, const idx_t i) {
+	void write_buffer(const int tid, const int64_t i) {
 		ConsensusPerThreadData& pdata(data[tid]);
 		{						// scoping for lock_guard
 			std::vector<CnsResult>::const_iterator a(pdata.cns_results.begin());
@@ -308,7 +310,7 @@ class ConsensusThreadData {
 
 void normalize_gaps(const std::string& qstr, const std::string& tstr, std::string& qnorm, std::string& tnorm, int push);
 
-void allocate_ecs(ConsensusThreadData &data, ExtensionCandidate* ec_list, idx_t nec);
-void allocate_ecs(ConsensusThreadData &data, ExtensionCandidateCompressed* ec_list, idx_t nec);
+void allocate_ecs(ConsensusThreadData &data, ExtensionCandidate* ec_list, int64_t nec);
+void allocate_ecs(ConsensusThreadData &data, ExtensionCandidateCompressed* ec_list, int64_t nec);
 
 #endif // _READS_CORRECTION_AUX_H

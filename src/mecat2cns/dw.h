@@ -1,16 +1,16 @@
 #ifndef DW_H
 #define DW_H
 
-#include "../common/defs.h"	// idx_t
 #include <math.h>	// ceil()
 #include <string>	// string
+#include <stdint.h>	// int64_t, uint8_t
 #include <vector>	// vector<>
 
 class Alignment {
     public:
 	// current_size tracks actual buffer use
 	int aln_q_e, aln_t_e, current_size;
-	std::vector<uint1> q_aln_str, t_aln_str;
+	std::vector<uint8_t> q_aln_str, t_aln_str;
     public:
 	explicit Alignment(const size_t max_size) : q_aln_str(max_size), t_aln_str(max_size) { }
 	~Alignment() { }
@@ -29,7 +29,7 @@ class OutputStore {
 	int buffer_start, left_size, right_size;
 	int query_start, query_end;
 	int target_start, target_end;
-	std::vector<uint1> q_buffer, t_buffer;
+	std::vector<uint8_t> q_buffer, t_buffer;
     public:
 	explicit OutputStore(const size_t max_size) : q_buffer(max_size), t_buffer(max_size) { }
 	~OutputStore() { }
@@ -85,7 +85,7 @@ class DiffRunningData {
 	std::vector<DPathIndex> d_path_index;
 	std::vector<PathPoint> aln_path;
     public:
-	explicit DiffRunningData(const double error_rate, const idx_t max_read_size) :
+	explicit DiffRunningData(const double error_rate, const int64_t max_read_size) :
 		// if the definitions of k_offset, band_tolerance, max_band_size
 		// in dw.cpp are changed, you'll need to update these to reflect them
 		align((segment_size + SEGMENT_BORDER) * 2),
@@ -102,7 +102,7 @@ class DiffRunningData {
 
 class M5Record {
     public:
-	idx_t qoff, qend, soff, send;
+	int64_t qoff, qend, soff, send;
 	std::string qaln, saln;
 	explicit M5Record() { }
 	~M5Record() { }

@@ -3,11 +3,12 @@
 
 #include <fstream>	// ifstream, ofstream, streampos, streamsize
 #include <string>	// string
+#include <stdint.h>	// int64_t
 #include <time.h>	// time(), time_t
 #include <unistd.h>	// _SC_OPEN_MAX, F_OK, access(), off_t, rename(), sysconf(), unlink()
 #include <vector>	// vector<>
 
-#include "../common/defs.h"	// ERROR(), LOG(), close_fstream(), idx_t, open_fstream()
+#include "../common/defs.h"	// ERROR(), LOG()
 #include "../common/pod_darr.h"	// PODArray<>
 
 template <class T> class PartitionResultsWriter {
@@ -20,7 +21,7 @@ template <class T> class PartitionResultsWriter {
 	PODArray<T>* results;	// can't use vector<>, causes memory corruption
 	std::ofstream* files;	// can't use vector<>, non-copyable
 	std::vector<std::string> file_names;
-	std::vector<idx_t> counts;
+	std::vector<int64_t> counts;
     public:
 	// can't make kNumFiles static, as sysconf() is run-time only;
 	// leave room for stdin, stdout, stderr, a few others
@@ -48,7 +49,7 @@ template <class T> class PartitionResultsWriter {
 			if (results[i].size()) {
 				write_buffer_to_disk(i);
 			}
-			close_fstream(files[i]);
+			files[i].close();
 			// don't attempt to re-finish finished files
 			if (!file_names[i].empty()) {
 				const std::string tmp_file(file_names[i] + ".tmp");
@@ -75,7 +76,7 @@ template <class T> class PartitionResultsWriter {
 		// remove checkpoint file
 		unlink(std::string(done_file_ + ".ckpt").c_str());
 	}
-	int WriteOneResult(const int i, const idx_t seq_id, const T& r) {
+	int WriteOneResult(const int i, const int64_t seq_id, const T& r) {
 		++counts[i];
 		results[i].push_back(r);
 		if (results[i].size() == kStoreSize) {
@@ -145,10 +146,10 @@ template <class T> class PartitionResultsWriter {
 		}
 		next_checkpoint_time_ = time(0) + 300;
 	}
-	idx_t total_count() const {
-		idx_t total(0);
-		std::vector<idx_t>::const_iterator a(counts.begin());
-		const std::vector<idx_t>::const_iterator end_a(counts.end());
+	int64_t total_count() const {
+		int64_t total(0);
+		std::vector<int64_t>::const_iterator a(counts.begin());
+		const std::vector<int64_t>::const_iterator end_a(counts.end());
 		for (; a != end_a; ++a) {
 			total += *a;
 		}
@@ -176,13 +177,13 @@ template <class T> class PartitionResultsWriter {
 					// mark as already finished
 					file_names[i].clear();
 					// use /dev/null to prevent write errors
-					open_fstream(files[i], "/dev/null", std::ios::binary);
+					files[i].open("/dev/null", std::ios::binary);
 				} else {
 					// don't truncate on restart
-					open_fstream(files[i], tmp_file.c_str(), std::ios::binary | std::ios::in);
+					files[i].open(tmp_file.c_str(), std::ios::binary | std::ios::in);
 				}
 			} else {
-				open_fstream(files[i], tmp_file.c_str(), std::ios::binary);
+				files[i].open(tmp_file.c_str(), std::ios::binary);
 			}
 			if (!files[i]) {
 				ERROR("Open failed on %s", tmp_file.c_str());
@@ -201,7 +202,7 @@ template <class T> class PartitionResultsWriter {
 	}
 };
 
-template <class T> T* load_partition_data(const char* const path, idx_t& num_results) {
+template <class T> T* load_partition_data(const char* const path, int64_t& num_results) {
 	std::ifstream in;
 	open_fstream(in, path, std::ios::binary);
 	in.seekg(0, std::ios::end);

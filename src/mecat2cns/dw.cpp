@@ -1,8 +1,10 @@
 #include "dw.h"
+
 #include <algorithm>	// copy(), fill()
 #include <vector>	// vector<>
+#include <stdint.h>	// uint8_t
 
-#define GAP_ALN 4
+#define GAP_VAL 4
 
 static void fill_align(const std::string& query, const int q_offset, const std::string& target, const int t_offset, Alignment& align, const std::vector<DPathData>& d_path, const DPathData* d_path_aux, const std::vector<DPathIndex>& d_path_index, int d, std::vector<PathPoint>& aln_path, const int extend_forward) {
 	align.aln_q_e = d_path_aux->x2;
@@ -35,10 +37,10 @@ static void fill_align(const std::string& query, const int q_offset, const std::
 				align.current_size += dx;
 			} else if (dx) {
 				std::copy(query_p + current_x, query_p + new_x, &align.q_aln_str[align.current_size]);
-				std::fill(&align.t_aln_str[align.current_size], &align.t_aln_str[align.current_size] + dx, GAP_ALN);
+				std::fill(&align.t_aln_str[align.current_size], &align.t_aln_str[align.current_size] + dx, GAP_VAL);
 				align.current_size += dx;
 			} else if (dy) {
-				std::fill(&align.q_aln_str[align.current_size], &align.q_aln_str[align.current_size] + dy, GAP_ALN);
+				std::fill(&align.q_aln_str[align.current_size], &align.q_aln_str[align.current_size] + dy, GAP_VAL);
 				std::copy(target_p + current_y, target_p + new_y, &align.t_aln_str[align.current_size]);
 				align.current_size += dy;
 			}
@@ -62,11 +64,11 @@ static void fill_align(const std::string& query, const int q_offset, const std::
 				align.current_size += dx;
 				const int offset(align.q_aln_str.size() - align.current_size);
 				std::copy(query_p - new_x, query_p - current_x, &align.q_aln_str[offset]);
-				std::fill(&align.t_aln_str[offset], &align.t_aln_str[offset] + dx, GAP_ALN);
+				std::fill(&align.t_aln_str[offset], &align.t_aln_str[offset] + dx, GAP_VAL);
 			} else if (dy) {
 				align.current_size += dy;
 				const int offset(align.q_aln_str.size() - align.current_size);
-				std::fill(&align.q_aln_str[offset], &align.q_aln_str[offset] + dy, GAP_ALN);
+				std::fill(&align.q_aln_str[offset], &align.q_aln_str[offset] + dy, GAP_VAL);
 				std::copy(target_p - new_y, target_p - current_y, &align.t_aln_str[offset]);
 			}
 			current_x = new_x;
@@ -199,13 +201,13 @@ static void dw_in_one_direction(const std::string& query, const int q_offset, co
 			int q_bps(0), t_bps(0), num_matches(0);
 			if (extend_forward) {
 				for (k = align.current_size - 1; k != -1; --k) {
-					const uint1 qc(align.q_aln_str[k]);
-					const uint1 tc(align.t_aln_str[k]);
+					const uint8_t qc(align.q_aln_str[k]);
+					const uint8_t tc(align.t_aln_str[k]);
 					if (qc != tc) {
 						num_matches = 0;
-						if (qc == GAP_ALN) {
+						if (qc == GAP_VAL) {
 							--q_bps;
-						} else if (tc == GAP_ALN) {
+						} else if (tc == GAP_VAL) {
 							--t_bps;
 						}
 					} else if (++num_matches == 4) {
@@ -217,13 +219,13 @@ static void dw_in_one_direction(const std::string& query, const int q_offset, co
 			} else {
 				const int offset(align.q_aln_str.size() - align.current_size);
 				for (k = offset; k != static_cast<int>(align.q_aln_str.size()); ++k) {
-					const uint1 qc(align.q_aln_str[k]);
-					const uint1 tc(align.t_aln_str[k]);
+					const uint8_t qc(align.q_aln_str[k]);
+					const uint8_t tc(align.t_aln_str[k]);
 					if (qc != tc) {
 						num_matches = 0;
-						if (qc == GAP_ALN) {
+						if (qc == GAP_VAL) {
 							--q_bps;
-						} else if (tc == GAP_ALN) {
+						} else if (tc == GAP_VAL) {
 							--t_bps;
 						}
 					} else if (++num_matches == 4) {
@@ -262,10 +264,10 @@ static void dw_in_one_direction(const std::string& query, const int q_offset, co
 	} while (not_at_end);
 }
 
-static int gap_count(const std::vector<uint1>& buffer, int i, const int end_i) {
+static int gap_count(const std::vector<uint8_t>& buffer, int i, const int end_i) {
 	int j(0);
 	for (; i != end_i; ++i) {
-		if (buffer[i] == GAP_ALN) {
+		if (buffer[i] == GAP_VAL) {
 			++j;
 		}
 	}
@@ -290,7 +292,7 @@ static int dw(const std::string& query, const int query_start, const std::string
 	return 1;
 }
 
-static void decode_sequence(std::string& out_seq, const std::vector<uint1>& in_seq, const size_t offset, const size_t size) {
+static void decode_sequence(std::string& out_seq, const std::vector<uint8_t>& in_seq, const size_t offset, const size_t size) {
 	out_seq.resize(size);
 	for (size_t i(0); i != size; ++i) {
 		out_seq[i] = "ACGT-"[in_seq[offset + i]];
@@ -312,14 +314,14 @@ int GetAlignment(const std::string& query, const int query_start, const std::str
 	const int end_k(result.buffer_start + result.right_size);
 	int k(start_k);
 	for (; k != end_k; ++k) {
-		const uint1 qc(result.q_buffer[k]);
-		const uint1 tc(result.t_buffer[k]);
+		const uint8_t qc(result.q_buffer[k]);
+		const uint8_t tc(result.t_buffer[k]);
 		if (qc != tc) {
 			eit = 0;
 			// we don't count gaps
-			if (qc == GAP_ALN) {
+			if (qc == GAP_VAL) {
 				--qrb;
-			} else if (tc == GAP_ALN) {
+			} else if (tc == GAP_VAL) {
 				--trb;
 			}
 		} else if (++eit == consecutive_match_region_size) {
@@ -338,14 +340,14 @@ int GetAlignment(const std::string& query, const int query_start, const std::str
 	int tre(0);	// t ending basepair offset to good sequence
 	eit = 0;	// still matching run length
 	for (k = end_k - 1;; --k) {
-		const uint1 qc(result.q_buffer[k]);
-		const uint1 tc(result.t_buffer[k]);
+		const uint8_t qc(result.q_buffer[k]);
+		const uint8_t tc(result.t_buffer[k]);
 		if (qc != tc) {
 			eit = 0;
 			// we don't count gaps
-			if (qc == GAP_ALN) {
+			if (qc == GAP_VAL) {
 				--qre;
-			} else if (tc == GAP_ALN) {
+			} else if (tc == GAP_VAL) {
 				--tre;
 			}
 		} else if (++eit == consecutive_match_region_size) {

@@ -1,11 +1,12 @@
 #include "reads_correction_aux.h"
+
+#include <cassert>	// assert()
 #include <string>	// string
 
 void normalize_gaps(const std::string& qstr, const std::string& tstr, std::string& qnorm, std::string& tnorm, const int push)
 {
     qnorm.clear();
     tnorm.clear();
-    const char kGap = '-';
 
 #ifndef NDEBUG
     int qcnt = 0, tcnt = 0;
@@ -13,8 +14,8 @@ void normalize_gaps(const std::string& qstr, const std::string& tstr, std::strin
     {
         const char qc = qstr[i];
         const char tc = tstr[i];
-        if (qc != kGap) ++qcnt;
-        if (tc != kGap) ++tcnt;
+        if (qc != GAP_CHAR) ++qcnt;
+        if (tc != GAP_CHAR) ++tcnt;
     }
 #endif
 
@@ -23,8 +24,8 @@ void normalize_gaps(const std::string& qstr, const std::string& tstr, std::strin
     {
         const char qc = qstr[i];
         const char tc = tstr[i];
-        if (qc != tc && qc != kGap && tc != kGap)
-        { qnorm += kGap; qnorm += qc; tnorm += tc; tnorm += kGap; }
+        if (qc != tc && qc != GAP_CHAR && tc != GAP_CHAR)
+        { qnorm += GAP_CHAR; qnorm += qc; tnorm += tc; tnorm += GAP_CHAR; }
         else
         { qnorm += qc; tnorm += tc; }
     }
@@ -37,45 +38,45 @@ void normalize_gaps(const std::string& qstr, const std::string& tstr, std::strin
         for (idx_t i = 0; i < qlen - 1; ++i)
         {
             // push target gaps
-            if (tnorm[i] == kGap)
+            if (tnorm[i] == GAP_CHAR)
             {
                 idx_t j = i;
                 while (1)
                 {
                     const char c = tnorm[++j];
-                    if (c != kGap || j > qlen - 1)
+                    if (c != GAP_CHAR || j > qlen - 1)
                     {
-                        if (c == qnorm[i]) { tnorm[i] = c; tnorm[j] = kGap; }
+                        if (c == qnorm[i]) { tnorm[i] = c; tnorm[j] = GAP_CHAR; }
                         break;
                     }
                 }
             }
             // push query gaps
-            if (qnorm[i] == kGap)
+            if (qnorm[i] == GAP_CHAR)
             {
                 idx_t j = i;
                 while (1)
                 {
                     const char c = qnorm[++j];
-                    if (c != kGap || j > tlen - 1)
+                    if (c != GAP_CHAR || j > tlen - 1)
                     {
-                        if (c == tnorm[i]) { qnorm[i] = c; qnorm[j] = kGap; }
+                        if (c == tnorm[i]) { qnorm[i] = c; qnorm[j] = GAP_CHAR; }
                         break;
                     }
                 }
             }
         }
     }
-    r_assert(qnorm.size() == tnorm.size());
+    assert(qnorm.size() == tnorm.size());
 
 #ifndef NDEBUG
     int qcnt2 = 0, tcnt2 = 0;
     for (std::string::const_iterator citer = qnorm.begin(); citer != qnorm.end(); ++citer)
-        if ((*citer) != kGap) ++qcnt2;
+        if ((*citer) != GAP_CHAR) ++qcnt2;
     for (std::string::const_iterator citer = tnorm.begin(); citer != tnorm.end(); ++citer)
-        if ((*citer) != kGap) ++tcnt2;
-    d_assert(qcnt == qcnt2);
-    d_assert(tcnt == tcnt2);
+        if ((*citer) != GAP_CHAR) ++tcnt2;
+    assert(qcnt == qcnt2);
+    assert(tcnt == tcnt2);
 #endif
 }
 

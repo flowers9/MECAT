@@ -1,10 +1,12 @@
 #include "reads_correction_can.h"
 
+#include <cassert>	// assert()
 #include <cstring>
 #include <limits>	// numeric_limits<>
 #include <sstream>
 #include <string>	// string
 
+#include "../common/defs.h"	// TECH_PACBIO
 #include "MECAT_AlnGraphBoost.H"
 #include "mecat_correction.h"
 #include "overlaps_partition.h"
@@ -185,7 +187,7 @@ static int reads_correction_can_p(ReadsCorrectionOptions& rco, std::vector<std::
 	DynamicTimer dtimer(process_info);
 	consensus_one_partition_can(p.c_str(), data);
 	close_fstream(out);
-	assert(rename(results_file_tmp.c_str(), results_file.c_str()) == 0);
+	assert(rename(results_file_tmp.c_str(), results_file.c_str()));
 	return 0;
 }
 
@@ -224,7 +226,7 @@ int reads_correction_can(ReadsCorrectionOptions& rco) {
 			consensus_one_partition_can(p.c_str(), data);
 		}
 		close_fstream(out);
-		assert(rename(tmp_file.c_str(), rco.corrected_reads) == 0);
+		assert(rename(tmp_file.c_str(), rco.corrected_reads));
 	}
 	return 0;
 }
