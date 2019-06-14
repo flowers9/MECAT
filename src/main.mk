@@ -25,4 +25,6 @@ SUBMAKEFILES := mecat2pw/pw.mk \
 		mecat2cns/mecat2cns.mk \
 		filter_reads/filter_reads.mk
 
-TGT_CXXFLAGS := -D _FILE_OFFSET_BITS=64
+TGT_CXXFLAGS := -D _FILE_OFFSET_BITS=64 -std=c++11 -O3 -march=native -flto -fno-fat-lto-objects -fno-builtin
+TGT_LDFLAGS  := ${TGT_CXXFLAGS}
+ARFLAGS      += --plugin /usr/lib/gcc/x86_64-linux-gnu/5/liblto_plugin.so

@@ -19,7 +19,7 @@ struct ReadsCorrectionOptions {
     int         min_align_size;
     int         min_cov;
     int		min_size;
-    bool        print_usage_info;
+    int		print_usage_info;
     int         tech;
     int         num_partition_files;
     int         job_index;
@@ -34,8 +34,6 @@ void print_usage(const char* prog);
 
 int parse_arguments(int argc, char* argv[], ReadsCorrectionOptions& t);
 
-void print_options(ReadsCorrectionOptions& t);
-
-std::string make_options(const ReadsCorrectionOptions& t);
+void make_options(const ReadsCorrectionOptions& t, std::string& new_options_str);
 
 #endif // OPTIONS_H

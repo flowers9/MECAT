@@ -86,6 +86,8 @@ class DiffRunningData {
 	std::vector<PathPoint> aln_path;
     public:
 	explicit DiffRunningData(const double error_rate, const idx_t max_read_size) :
+		// if the definitions of k_offset, band_tolerance, max_band_size
+		// in dw.cpp are changed, you'll need to update these to reflect them
 		align((segment_size + SEGMENT_BORDER) * 2),
 		result(max_read_size * 2),
 		DynQ(ceil((segment_size + SEGMENT_BORDER) * 4 * error_rate) * 2),

@@ -15,7 +15,7 @@ static double mapping_ratio_pacbio	= 0.6;
 static int align_size_pacbio		= 1000;
 static int cov_pacbio			= 4;
 static int min_size_pacbio		= 2000;
-static bool print_usage_pacbio		= false;
+static int print_usage_pacbio		= 0;
 static int tech_pacbio			= TECH_PACBIO;
 static double error_rate_pacbio		= .15;
 
@@ -25,7 +25,7 @@ static double mapping_ratio_nanopore	= 0.4;
 static int align_size_nanopore		= 400;
 static int cov_nanopore			= 6;
 static int min_size_nanopore		= 2000;
-static bool print_usage_nanopore	= false;
+static int print_usage_nanopore		= 0;
 static int tech_nanopore		= TECH_NANOPORE;
 static double error_rate_nanopore	= .2;
 
@@ -72,9 +72,7 @@ static size_t convert_integer(const std::string& s) {
 	return value;
 }
 
-void
-print_pacbio_default_options()
-{
+static void print_pacbio_default_options() {
 	std::cerr << "-" << input_type_n << " " << input_type_pacbio
 		 << " -" << num_threads_n << " " << num_threads_pacbio
 		 << " -" << mapping_ratio_n << " " << mapping_ratio_pacbio
@@ -84,8 +82,7 @@ print_pacbio_default_options()
 		 << "\n";
 }
 
-void print_nanopore_default_options()
-{
+static void print_nanopore_default_options() {
 	std::cerr << "-" << input_type_n << " " << input_type_nanopore
 		 << " -" << num_threads_n << " " << num_threads_nanopore
 		 << " -" << mapping_ratio_n << " " << mapping_ratio_nanopore
@@ -96,9 +93,7 @@ void print_nanopore_default_options()
 }
 
 // given options, recreate arguments from the command line
-std::string
-make_options(const ReadsCorrectionOptions& options)
-{
+void make_options(const ReadsCorrectionOptions& options, std::string& new_options) {
         std::ostringstream cmd;
 	cmd << " -" << input_type_n << " " << (options.input_type == INPUT_TYPE_CAN ? 0 : 1);
 	if (options.num_threads > -1) {
@@ -146,7 +141,7 @@ make_options(const ReadsCorrectionOptions& options)
 	cmd << " " << options.m4;
 	cmd << " " << options.reads;
 	cmd << " " << options.corrected_reads;
-        return cmd.str();
+	new_options = cmd.str();
 }
 
 void print_usage(const char* prog) {
@@ -241,7 +236,7 @@ int detect_tech(int argc, char* argv[]) {
 }
 
 int parse_arguments(int argc, char* argv[], ReadsCorrectionOptions& t) {
-	bool parse_success(true);
+	int parse_success(1);
 	const int tech(detect_tech(argc, argv));
 	if (tech == -1) {
 		return 1;
@@ -320,15 +315,15 @@ int parse_arguments(int argc, char* argv[], ReadsCorrectionOptions& t) {
 	}
 	if (t.batch_size == 0) {
 		std::cerr << "batch size must be greater than 0\n";
-		parse_success = false;
+		parse_success = 0;
 	}
 	if (t.min_mapping_ratio < 0.0) {
 		std::cerr << "mapping ratio must be >= 0.0\n";
-		parse_success = false;
+		parse_success = 0;
 	}
 	if (t.min_size < 0) {
 		std::cerr << "sequence size must be >= 0\n";
-		parse_success = false;
+		parse_success = 0;
 	}
 	if (argc - optind < 3) {
 		return 1;
@@ -336,12 +331,10 @@ int parse_arguments(int argc, char* argv[], ReadsCorrectionOptions& t) {
 	t.m4 = argv[argc - 3];
 	t.reads = argv[argc - 2];
 	t.corrected_reads = argv[argc - 1];
-	return parse_success ? 0 : 1;
+	return parse_success;
 }
 
-void
-print_options(ReadsCorrectionOptions& t)
-{
+static void print_options(ReadsCorrectionOptions& t) {
 	std::cout << "input_type:\t"	<< t.input_type << "\n";
 	if (t.m4) std::cout << "reads\t" << t.m4 << "\n";
 	if (t.reads) std::cout << "output\t" << t.reads << "\n";

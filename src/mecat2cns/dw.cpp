@@ -84,51 +84,96 @@ static int Align(const int extend_size, const std::string& query, const int q_of
 	int d_path_idx(0), best_combined_match_length(0);
 	int best(-1), best_score(-k_offset);
 	q_extent[k_offset + 1] = 0;	// initialize starting point
-	for (int d(0), min_k(0), max_k(0); d != k_offset && max_k - min_k < max_band_size; ++d) {
-		// starting point of each "d" set of entries
-		d_path_index[d].set(d_path_idx, min_k);
-		for (int k(min_k); k <= max_k; k += 2) {
-			int q_pos, pre_k;
-			if (k == min_k || (k != max_k && q_extent[k_offset + k - 1] < q_extent[k_offset + k + 1])) {
-				pre_k = k + 1;
-				q_pos = q_extent[k_offset + k + 1];
-			} else {
-				pre_k = k - 1;
-				q_pos = q_extent[k_offset + k - 1] + 1;
-			}
-			int t_pos(q_pos - k);
-			// start of exact match
-			const int q_start(q_pos), t_start(t_pos);
-			// find the other end of exact match
-			if (extend_forward) {
+	// extend_forward only affects innermost loop, but let's move it
+	// outside as a loop invariant
+	if (extend_forward) {
+		for (int d(0), min_k(0), max_k(0); d != k_offset && max_k - min_k < max_band_size; ++d) {
+			// starting point of each "d" set of entries
+			d_path_index[d].set(d_path_idx, min_k);
+			for (int k(min_k); k <= max_k; k += 2) {
+				int pre_k, q_pos;
+				if (k == min_k || (k != max_k && q_extent[k_offset + k - 1] < q_extent[k_offset + k + 1])) {
+					pre_k = k + 1;
+					q_pos = q_extent[k_offset + k + 1];
+				} else {
+					pre_k = k - 1;
+					q_pos = q_extent[k_offset + k - 1] + 1;
+				}
+				int t_pos(q_pos - k);
+				// start of exact match
+				const int q_start(q_pos), t_start(t_pos);
+				// find the other end of exact match
+				// XXX - this loop could in theory be vectorized
 				for (; q_pos < extend_size && t_pos < extend_size && query[q_offset + q_pos] == target[t_offset + t_pos]; ++q_pos, ++t_pos) { }
-			} else {
+				d_path[d_path_idx].set(q_start, t_start, q_pos, t_pos, pre_k);
+				// see if we reached the end
+				const int score(q_pos + t_pos);
+				if ((q_pos == extend_size || t_pos == extend_size) && best_score < score) {
+					best_score = score;
+					best = d_path_idx;
+				}
+				++d_path_idx;
+				q_extent[k_offset + k] = q_pos;
+				combined_match_length[k_offset + k] = score;
+				if (best_combined_match_length < score) {
+					best_combined_match_length = score;
+				}
+			}
+			if (best != -1) {	// finished alignment
+				fill_align(query, q_offset, target, t_offset, align, d_path, &d_path[best], d_path_index, d, aln_path, extend_forward);
+				return 1;
+			}
+			// shift ends to one outside "good" band
+			const int cutoff(best_combined_match_length - band_tolerance);
+			for (; combined_match_length[k_offset + min_k] < cutoff; min_k += 2) { }
+			--min_k;
+			for (; combined_match_length[k_offset + max_k] < cutoff; max_k -= 2) { }
+			++max_k;
+		}
+	} else {
+		for (int d(0), min_k(0), max_k(0); d != k_offset && max_k - min_k < max_band_size; ++d) {
+			// starting point of each "d" set of entries
+			d_path_index[d].set(d_path_idx, min_k);
+			for (int k(min_k); k <= max_k; k += 2) {
+				int pre_k, q_pos;
+				if (k == min_k || (k != max_k && q_extent[k_offset + k - 1] < q_extent[k_offset + k + 1])) {
+					pre_k = k + 1;
+					q_pos = q_extent[k_offset + k + 1];
+				} else {
+					pre_k = k - 1;
+					q_pos = q_extent[k_offset + k - 1] + 1;
+				}
+				int t_pos(q_pos - k);
+				// start of exact match
+				const int q_start(q_pos), t_start(t_pos);
+				// find the other end of exact match
+				// XXX - this loop could in theory be vectorized
 				for (; q_pos < extend_size && t_pos < extend_size && query[q_offset - q_pos] == target[t_offset - t_pos]; ++q_pos, ++t_pos) { }
+				d_path[d_path_idx].set(q_start, t_start, q_pos, t_pos, pre_k);
+				// see if we reached the end
+				const int score(q_pos + t_pos);
+				if ((q_pos == extend_size || t_pos == extend_size) && best_score < score) {
+					best_score = score;
+					best = d_path_idx;
+				}
+				++d_path_idx;
+				q_extent[k_offset + k] = q_pos;
+				combined_match_length[k_offset + k] = score;
+				if (best_combined_match_length < score) {
+					best_combined_match_length = score;
+				}
 			}
-			d_path[d_path_idx].set(q_start, t_start, q_pos, t_pos, pre_k);
-			// see if we reached the end
-			const int score(q_pos + t_pos);
-			if ((q_pos == extend_size || t_pos == extend_size) && best_score < score) {
-				best_score = score;
-				best = d_path_idx;
+			if (best != -1) {	// finished alignment
+				fill_align(query, q_offset, target, t_offset, align, d_path, &d_path[best], d_path_index, d, aln_path, extend_forward);
+				return 1;
 			}
-			++d_path_idx;
-			q_extent[k_offset + k] = q_pos;
-			combined_match_length[k_offset + k] = score;
-			if (best_combined_match_length < score) {
-				best_combined_match_length = score;
-			}
+			// shift ends to one outside "good" band
+			const int cutoff(best_combined_match_length - band_tolerance);
+			for (; combined_match_length[k_offset + min_k] < cutoff; min_k += 2) { }
+			--min_k;
+			for (; combined_match_length[k_offset + max_k] < cutoff; max_k -= 2) { }
+			++max_k;
 		}
-		if (best != -1) {	// finished alignment
-			fill_align(query, q_offset, target, t_offset, align, d_path, &d_path[best], d_path_index, d, aln_path, extend_forward);
-			return 1;
-		}
-		// shift ends to one outside "good" band
-		const int cutoff(best_combined_match_length - band_tolerance);
-		for (; combined_match_length[k_offset + min_k] < cutoff; min_k += 2) { }
-		--min_k;
-		for (; combined_match_length[k_offset + max_k] < cutoff; max_k -= 2) { }
-		++max_k;
 	}
 	return 0;	// couldn't complete alignemnt
 }

@@ -165,13 +165,7 @@ static void get_effective_ranges(std::vector<MappingRange>& mranges, std::vector
 // breaks output sequence into chunks of no more than MaxSeqSize (if needed);
 // split chunks will have an OvlpSize overlap
 
-static void
-output_cns_result(std::vector<CnsResult>& cns_results,
-				  CnsResult& cr,
-				  const idx_t beg,
-				  const idx_t end,
-				  const std::string& cns_seq) 
-{
+static void output_cns_result(std::vector<CnsResult>& cns_results, CnsResult& cr, const idx_t beg, const idx_t end, const std::string& cns_seq) {
 	const size_t MaxSeqSize = 60000;
 	const size_t OvlpSize = 10000;
 	// BlkSize must be >= OvlpSize
@@ -200,16 +194,8 @@ output_cns_result(std::vector<CnsResult>& cns_results,
 	}
 }
 
-static inline bool
-check_ovlp_mapping_range(const int qb, const int qe, const int qs,
-						 const int sb, const int se, const int ss,
-						 double ratio)
-{
-	const int oq = qe - qb;
-	const int qqs = qs * ratio;
-	const int os = se - sb;
-	const int qss = ss * ratio;
-	return oq >= qqs || os >= qss;
+static inline bool check_ovlp_mapping_range(const int qb, const int qe, const int qs, const int sb, const int se, const int ss, double ratio) {
+	return qe - qb >= qs * ratio || se - sb >= ss * ratio;
 }
 
 // look for areas of high coverage of about min_size or more,
@@ -327,8 +313,7 @@ void consensus_one_read_m4_pacbio(ConsensusThreadData& ctd, ConsensusPerThreadDa
 		Overlap& ovlp(overlaps[i]);
 		reads.GetSequence(ovlp.qid, ovlp.qdir == FWD, qstr);
 		const idx_t qext(ovlp.qdir == FWD ? ovlp.qext : ovlp.qsize - 1 - ovlp.qext);
-		const idx_t sext(ovlp.sext);
-		const bool r(GetAlignment(qstr, qext, tstr, sext, drd, m5, error_rate, min_align_size));
+		const int r(GetAlignment(qstr, qext, tstr, ovlp.sext, drd, m5, error_rate, min_align_size));
 		if (r) {
 			normalize_gaps(m5.qaln, m5.saln, nqstr, ntstr, 1);
 			meap_add_one_aln(nqstr, ntstr, m5.soff, cns_table);
@@ -341,9 +326,7 @@ void consensus_one_read_m4_pacbio(ConsensusThreadData& ctd, ConsensusPerThreadDa
 	consensus_worker(cns_table, pctd.id_list, cns_vec, nqstr, ntstr, eranges, ctd.rco.min_cov, ctd.rco.min_size, read_id, cns_results);
 }
 
-void
-consensus_one_read_m4_nanopore(ConsensusThreadData& ctd, ConsensusPerThreadData &pctd, const idx_t read_id, const idx_t sid, const idx_t eid)
-{
+void consensus_one_read_m4_nanopore(ConsensusThreadData& ctd, ConsensusPerThreadData &pctd, const idx_t read_id, const idx_t sid, const idx_t eid) {
 	PackedDB& reads = ctd.reads;
 	ExtensionCandidate* overlaps = (ExtensionCandidate*)pctd.candidates;
 	DiffRunningData& drd = pctd.drd;
@@ -376,16 +359,12 @@ consensus_one_read_m4_nanopore(ConsensusThreadData& ctd, ConsensusPerThreadData 
 	std::vector<CnsTableItem>& cns_table = pctd.cns_table;
 	cns_table.assign(read_size, CnsTableItem());	// reset table
 	cns_vec.clear();
-	for (idx_t i = L; i < R; ++i)
-	{
-		Overlap& ovlp = overlaps[i];
+	for (idx_t i(L); i < R; ++i) {
+		Overlap& ovlp(overlaps[i]);
 		reads.GetSequence(ovlp.qid, ovlp.qdir == FWD, qstr);
-		idx_t qext = ovlp.qext;
-		idx_t sext = ovlp.sext;
-		if (ovlp.qdir == REV) qext = ovlp.qsize - 1 - qext;
-		bool r = GetAlignment(qstr, qext, tstr, sext, drd, m5, error_rate, min_align_size);
-		if (r && check_ovlp_mapping_range(m5.qoff, m5.qend, ovlp.qsize, m5.soff, m5.send, ovlp.ssize, min_mapping_ratio))
-		{
+		const idx_t qext(ovlp.qdir == FWD ? ovlp.qext : ovlp.qsize - 1 - qext);
+		const int r(GetAlignment(qstr, qext, tstr, ovlp.sext, drd, m5, error_rate, min_align_size));
+		if (r && check_ovlp_mapping_range(m5.qoff, m5.qend, ovlp.qsize, m5.soff, m5.send, ovlp.ssize, min_mapping_ratio)) {
 			normalize_gaps(m5.qaln, m5.saln, nqstr, ntstr, 1);
 			meap_add_one_aln(nqstr, ntstr, m5.soff, cns_table);
 			cns_vec.add_aln(m5.soff, m5.send, nqstr, ntstr);
@@ -456,7 +435,7 @@ void consensus_one_read_can_pacbio(ConsensusThreadData& ctd, ConsensusPerThreadD
 		const idx_t qsize(reads.read_size(ec.qid));
 		reads.GetSequence(ec.qid, ec.qdir() == FWD, qstr);
 		const idx_t qext(ec.qdir() == FWD ? ec.qext() : qsize - 1 - ec.qext());
-		const bool r(GetAlignment(qstr, qext, tstr, ec.sext, drd, m5, error_rate, min_align_size));
+		const int r(GetAlignment(qstr, qext, tstr, ec.sext, drd, m5, error_rate, min_align_size));
 		if (r && check_ovlp_mapping_range(m5.qoff, m5.qend, qsize, m5.soff, m5.send, ssize, min_mapping_ratio)) {
 			if (check_cov_stats(id_list, m5.soff, m5.send)) {
 				++num_added;
@@ -510,9 +489,8 @@ void consensus_one_read_can_nanopore(ConsensusThreadData& ctd, ConsensusPerThrea
 		}
 		const idx_t qsize(reads.read_size(ec.qid));
 		reads.GetSequence(ec.qid, ec.qdir() == FWD, qstr);
-		const idx_t sext(ec.sext);
 		const idx_t qext(ec.qdir() == FWD ? ec.qext() : qsize - 1 - ec.qext());
-		const bool r(GetAlignment(qstr, qext, tstr, sext, drd, m5, error_rate, min_align_size));
+		const int r(GetAlignment(qstr, qext, tstr, ec.sext, drd, m5, error_rate, min_align_size));
 		if (r && check_ovlp_mapping_range(m5.qoff, m5.qend, qsize, m5.soff, m5.send, ssize, min_mapping_ratio)) {
 			if (check_cov_stats(id_list, m5.soff, m5.send)) {
 				++num_added;

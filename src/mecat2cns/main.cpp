@@ -1,7 +1,7 @@
 #include "reads_correction_can.h"
 #include "reads_correction_m4.h"
 #include "overlaps_partition.h"
-#include "options.h"			// ReadsCorrectionOptions
+#include "options.h"			// ReadsCorrectionOptions, make_options()
 #include "packed_db.h"			// PackedDB
 
 #include <fcntl.h>	// S_IRUSR, S_IXUSR
@@ -35,7 +35,9 @@ static void grid_start(const char* const prog, const ReadsCorrectionOptions &opt
 	unlink(script_file.c_str());
         std::ofstream out;
         open_fstream(out, script_file.c_str(), std::ios::out);
-        out << "#!/bin/bash\nset -e\ntrap 'touch " << exit_file << "' EXIT\nulimit -c 0\ntime " << prog << make_options(new_options) << "\n";
+	std::string new_options_str;
+	make_options(new_options, new_options_str);
+        out << "#!/bin/bash\nset -e\ntrap 'touch " << exit_file << "' EXIT\nulimit -c 0\ntime " << prog << new_options_str << "\n";
 	if (!out) {
 		std::cerr << "Error writing to " << script_file << "\n";
 		exit(1);
