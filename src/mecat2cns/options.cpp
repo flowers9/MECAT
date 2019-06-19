@@ -9,31 +9,28 @@
 
 #include "../common/defs.h"	// TECH_NANOPORE, TECH_PACBIO
 
-static int input_type_pacbio		= 1;
-static int num_threads_pacbio		= 1;
-static double mapping_ratio_pacbio	= 0.6;
-static int align_size_pacbio		= 1000;
-static int cov_pacbio			= 4;
-static int min_size_pacbio		= 2000;
-static int print_usage_pacbio		= 0;
-static int tech_pacbio			= TECH_PACBIO;
-static double error_rate_pacbio		= .15;
+static const double mapping_ratio_pacbio	= 0.6;
+static const int align_size_pacbio		= 1000;
+static const int cov_pacbio			= 4;
+static const int min_size_pacbio		= 2000;
+static const int tech_pacbio			= TECH_PACBIO;
+static const double error_rate_pacbio		= .15;
 
-static int input_type_nanopore		= 1;
-static int num_threads_nanopore		= 1;
-static double mapping_ratio_nanopore	= 0.4;
-static int align_size_nanopore		= 400;
-static int cov_nanopore			= 6;
-static int min_size_nanopore		= 2000;
-static int print_usage_nanopore		= 0;
-static int tech_nanopore		= TECH_NANOPORE;
-static double error_rate_nanopore	= .2;
+static const double mapping_ratio_nanopore	= 0.4;
+static const int align_size_nanopore		= 400;
+static const int cov_nanopore			= 6;
+static const int min_size_nanopore		= 2000;
+static const int tech_nanopore			= TECH_NANOPORE;
+static const double error_rate_nanopore		= .2;
 
-static int default_tech = TECH_PACBIO;
-static int num_partition_files = 0;
-static int full_reads = 0;
-static size_t read_buffer_size = 0;
-static idx_t batch_size = idx_t(1) << 33;	// 8 GB
+static const int default_tech = TECH_PACBIO;
+static const int num_partition_files = 0;
+static const int full_reads = 0;
+static const size_t read_buffer_size = 0;
+static const size_t batch_size = size_t(1) << 33;	// 8 GB
+static const int print_usage_info = 0;
+static const int input_type = 1;
+static const int num_threads = 1;
 
 static const char input_type_n    = 'i';
 static const char num_threads_n   = 't';
@@ -73,9 +70,7 @@ static size_t convert_integer(const std::string& s) {
 }
 
 static void print_pacbio_default_options() {
-	std::cerr << "-" << input_type_n << " " << input_type_pacbio
-		 << " -" << num_threads_n << " " << num_threads_pacbio
-		 << " -" << mapping_ratio_n << " " << mapping_ratio_pacbio
+	std::cerr << " -" << mapping_ratio_n << " " << mapping_ratio_pacbio
 		 << " -" << align_size_n << " " << align_size_pacbio
 		 << " -" << cov_n << " " << cov_pacbio << " "
 		 << " -" << min_size_n << " " << min_size_pacbio
@@ -83,9 +78,7 @@ static void print_pacbio_default_options() {
 }
 
 static void print_nanopore_default_options() {
-	std::cerr << "-" << input_type_n << " " << input_type_nanopore
-		 << " -" << num_threads_n << " " << num_threads_nanopore
-		 << " -" << mapping_ratio_n << " " << mapping_ratio_nanopore
+	std::cerr << " -" << mapping_ratio_n << " " << mapping_ratio_nanopore
 		 << " -" << align_size_n << " " << align_size_nanopore
 		 << " -" << cov_n << " " << cov_nanopore
 		 << " -" << min_size_n << " " << min_size_nanopore
@@ -187,24 +180,21 @@ ReadsCorrectionOptions init_consensus_options(const int tech) {
 	t.full_reads		= full_reads;
 	t.read_buffer_size	= read_buffer_size;
 	t.batch_size            = batch_size;
+	t.print_usage_info      = print_usage_info;
+	t.input_type            = input_type;
+	t.num_threads           = num_threads;
 	if (tech == TECH_PACBIO) {
-		t.input_type            = input_type_pacbio;
-		t.num_threads           = num_threads_pacbio;
 		t.min_mapping_ratio     = mapping_ratio_pacbio;
 		t.min_align_size        = align_size_pacbio;
 		t.min_cov               = cov_pacbio;
 		t.min_size              = min_size_pacbio;
-		t.print_usage_info      = print_usage_pacbio;
 		t.tech                  = tech_pacbio;
 		t.error_rate		= error_rate_pacbio;
 	} else {
-		t.input_type            = input_type_nanopore;
-		t.num_threads           = num_threads_nanopore;
 		t.min_mapping_ratio     = mapping_ratio_nanopore;
 		t.min_align_size        = align_size_nanopore;
 		t.min_cov               = cov_nanopore;
 		t.min_size              = min_size_nanopore;
-		t.print_usage_info      = print_usage_nanopore;
 		t.tech                  = tech_nanopore;
 		t.error_rate		= error_rate_nanopore;
 	}
@@ -275,7 +265,7 @@ int parse_arguments(int argc, char* argv[], ReadsCorrectionOptions& t) {
 				t.min_size = convert_integer(optarg);
 				break;
 			case usage_n:
-				t.print_usage_info = true;
+				t.print_usage_info = 1;
 				break;
 			case grid_options_n:
 				t.grid_options = optarg;
@@ -334,7 +324,7 @@ int parse_arguments(int argc, char* argv[], ReadsCorrectionOptions& t) {
 	return parse_success;
 }
 
-// not in use at the moment
+// not currently used
 #if 0
 static void print_options(ReadsCorrectionOptions& t) {
 	std::cout << "input_type:\t"	<< t.input_type << "\n";

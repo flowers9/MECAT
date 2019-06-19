@@ -33,14 +33,14 @@ void normalize_gaps(const std::string& qstr, const std::string& tstr, std::strin
     // push gaps to the right, but not pass the end
     if (push)
     {
-        idx_t qlen = qnorm.size();
-        idx_t tlen = tnorm.size();
-        for (idx_t i = 0; i < qlen - 1; ++i)
+        int64_t qlen = qnorm.size();
+        int64_t tlen = tnorm.size();
+        for (int64_t i = 0; i < qlen - 1; ++i)
         {
             // push target gaps
             if (tnorm[i] == GAP_CHAR)
             {
-                idx_t j = i;
+                int64_t j = i;
                 while (1)
                 {
                     const char c = tnorm[++j];
@@ -54,7 +54,7 @@ void normalize_gaps(const std::string& qstr, const std::string& tstr, std::strin
             // push query gaps
             if (qnorm[i] == GAP_CHAR)
             {
-                idx_t j = i;
+                int64_t j = i;
                 while (1)
                 {
                     const char c = qnorm[++j];
@@ -80,12 +80,12 @@ void normalize_gaps(const std::string& qstr, const std::string& tstr, std::strin
 #endif
 }
 
-void allocate_ecs(ConsensusThreadData& data, ExtensionCandidate* const ec_list, const idx_t nec) {
+void allocate_ecs(ConsensusThreadData& data, ExtensionCandidate* const ec_list, const int64_t nec) {
 	const int n(data.rco.num_threads);
 	// split by number of ec's, rather than reads, since reads ids
 	// are not contiguous and we could get empty lists
-	for (idx_t i(0), k(0); k != n; ++k) {
-		const idx_t start(i);
+	for (int64_t i(0), k(0); k != n; ++k) {
+		const int64_t start(i);
 		// drop fractions here, as we'll likely add a few more ec's below
 		i += (nec - i) / (n - k);
 		if (i != nec) {			// include all ec's for the last read
@@ -97,12 +97,12 @@ void allocate_ecs(ConsensusThreadData& data, ExtensionCandidate* const ec_list, 
 	}
 }
 
-void allocate_ecs(ConsensusThreadData& data, ExtensionCandidateCompressed* const ec_list, const idx_t nec) {
-	const idx_t n(data.rco.num_threads);
+void allocate_ecs(ConsensusThreadData& data, ExtensionCandidateCompressed* const ec_list, const int64_t nec) {
+	const int64_t n(data.rco.num_threads);
 	// split by number of ec's, rather than reads, since reads ids
 	// are not contiguous and we could get empty lists
-	for (idx_t i(0), k(0); k != n; ++k) {
-		const idx_t start(i);
+	for (int64_t i(0), k(0); k != n; ++k) {
+		const int64_t start(i);
 		// drop fractions here, as we'll likely add a few more ec's below
 		i += (nec - i) / (n - k);
 		if (i != nec) {			// include all ec's for the last read

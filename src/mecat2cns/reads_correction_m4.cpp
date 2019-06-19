@@ -16,10 +16,10 @@ void* reads_correction_func_m4(void* arg) {
 	const int tid(data.get_thread_id());
 	ConsensusPerThreadData& pdata(data.data[tid]);
 	ExtensionCandidate* const overlaps((ExtensionCandidate*)pdata.candidates);
-	const idx_t num_ovlps(pdata.num_candidates);
-	idx_t i = 0, j;
+	const int64_t num_ovlps(pdata.num_candidates);
+	int64_t i = 0, j;
 	while (i < num_ovlps) {
-		const idx_t sid = overlaps[i].sid;
+		const int64_t sid = overlaps[i].sid;
 		j = i + 1;
 		while (j < num_ovlps && overlaps[j].sid == sid) {
 			++j;
@@ -55,7 +55,7 @@ void* reads_correction_func_m4(void* arg) {
 }
 
 void consensus_one_partition_m4(const char* m4_file_name, ReadsCorrectionOptions& rco, PackedDB& reads, std::ostream& out) {
-	idx_t nec;
+	int64_t nec;
 	ExtensionCandidate* ec_list = load_partition_data<ExtensionCandidate>(m4_file_name, nec);
 	std::sort(ec_list, ec_list + nec, CmpExtensionCandidateBySidAndScore());
 	ConsensusThreadData data(rco, reads, out, m4_file_name);
@@ -90,7 +90,7 @@ static int reads_correction_m4_p(ReadsCorrectionOptions& rco, std::vector<std::s
 	sprintf(process_info, "processing %s", p.c_str());
 	DynamicTimer dtimer(process_info);
 	consensus_one_partition_m4(p.c_str(), rco, reads, out);
-	assert(rename(working_file.c_str(), results_file.c_str()));
+	assert(rename(working_file.c_str(), results_file.c_str()) == 0);
 	return 0;
 }
 

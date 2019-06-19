@@ -47,7 +47,7 @@ static void grid_start(const char* const prog, const ReadsCorrectionOptions &opt
 	chmod(script_file.c_str(), S_IRUSR | S_IXUSR);
 	std::string cmd(i == -1 && options.grid_options_split ? options.grid_options_split : options.grid_options);
 	cmd += " " + name + " " + script_file;
-	assert(system(cmd.c_str()));
+	assert(system(cmd.c_str()) == 0);
 }
 
 // exit files get modified during loop
@@ -98,7 +98,7 @@ static void merge_results(const char* const output, const std::list<std::string>
 
 int main(int argc, char** argv) {
 	ReadsCorrectionOptions rco;
-	if (parse_arguments(argc, argv, rco)) {
+	if (!parse_arguments(argc, argv, rco)) {
 		print_usage(argv[0]);
 		exit(1);
 	} else if (rco.print_usage_info) {
@@ -118,7 +118,7 @@ int main(int argc, char** argv) {
 		} else {
 			if (rco.input_type == INPUT_TYPE_CAN) {
 				// this speeds up candidate starts
-				const idx_t n_reads(PackedDB::convert_fasta_to_db(rco.reads, "fasta.db", rco.min_size));
+				const int64_t n_reads(PackedDB::convert_fasta_to_db(rco.reads, "fasta.db", rco.min_size));
 				if (rco.reads_to_correct <= 0 || n_reads < rco.reads_to_correct) {
 					rco.reads_to_correct = n_reads;
 				}

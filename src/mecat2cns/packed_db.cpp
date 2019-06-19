@@ -17,9 +17,9 @@ void PackedDB::add_one_seq(const Sequence& seq) {
 	if (max_read_size_ < seq.size()) {
 		max_read_size_ = seq.size();
 	}
-	const idx_t needed_size(db_size + seq.size());
+	const int64_t needed_size(db_size + seq.size());
 	if (max_db_size < needed_size) {
-		idx_t new_size(max_db_size > 1024 ? max_db_size : 1024);
+		int64_t new_size(max_db_size > 1024 ? max_db_size : 1024);
 		for (; new_size < needed_size; new_size *= 2) { }
 		uint8_t* const new_pac(new uint8_t[(new_size + 3) / 4]);
 		memcpy(new_pac, pac_, (db_size + 3) / 4);
@@ -30,7 +30,7 @@ void PackedDB::add_one_seq(const Sequence& seq) {
 	const Sequence::str_t& org_seq(seq.sequence());
 	const uint8_t* const table(get_dna_encode_table());
 	unsigned int rand_char(0);	// spread out unknown sequence in a repeatable fashion
-	for (idx_t i(0); i < seq.size(); ++i, ++db_size) {
+	for (int64_t i(0); i < seq.size(); ++i, ++db_size) {
 		const uint8_t c(table[static_cast<int>(org_seq[i])]);
 		set_char(db_size, c < 4 ? c : ++rand_char & 3);
 	}
@@ -74,7 +74,7 @@ static void checkpoint_conversion(const std::string& ckpt_file, const std::strin
 	}
 }
 
-size_t PackedDB::convert_fasta_to_db(const std::string& fasta, const std::string& output_prefix, const idx_t min_size) {
+size_t PackedDB::convert_fasta_to_db(const std::string& fasta, const std::string& output_prefix, const int64_t min_size) {
 	const std::string pac_name(output_prefix + ".pac");
 	const std::string index_name(output_prefix + ".idx");
 	size_t read_count(0);
@@ -117,7 +117,7 @@ size_t PackedDB::convert_fasta_to_db(const std::string& fasta, const std::string
 	Sequence read;
 	time_t next_checkpoint_time(time(0) + 300);
 	for (;;) {
-		const idx_t rsize(fr.read_one_seq(read));
+		const int64_t rsize(fr.read_one_seq(read));
 		if (rsize == -1) {
 			break;
 		}
@@ -133,10 +133,10 @@ size_t PackedDB::convert_fasta_to_db(const std::string& fasta, const std::string
 			continue;
 		}
 		Sequence::str_t& s(read.sequence());
-		const idx_t rbytes((rsize + 3) / 4);
+		const int64_t rbytes((rsize + 3) / 4);
 		// set_char uses | to set bits, so clear first
 		buffer.assign(rbytes, 0);
-		for (idx_t i(0); i < rsize; ++i) {
+		for (int64_t i(0); i < rsize; ++i) {
 			const uint8_t c(et[static_cast<int>(s[i])]);
 			set_char(buffer, i, c < 4 ? c : ++rand_char & 3);
 		}
@@ -169,7 +169,7 @@ size_t PackedDB::convert_fasta_to_db(const std::string& fasta, const std::string
 	return read_count;
 }
 
-void PackedDB::open_db(const std::string& path, const idx_t size) {
+void PackedDB::open_db(const std::string& path, const int64_t size) {
 	destroy();
 	const std::string pac_name(path + ".pac");
 	open_fstream(pstream, pac_name.c_str(), std::ios::in);
@@ -177,7 +177,7 @@ void PackedDB::open_db(const std::string& path, const idx_t size) {
 	if (!pstream.seekg(-sizeof(size_t), std::ios_base::end)) {
 		ERROR("Could not seek to end of fasta db to get size\n");
 	}
-	const idx_t file_size(pstream.tellg());
+	const int64_t file_size(pstream.tellg());
 	max_db_size = size ? std::min(file_size, size) : file_size;
 	if (max_db_size) {
 		pac_ = new uint8_t[max_db_size];
@@ -220,7 +220,7 @@ void PackedDB::open_db(const std::string& path, const idx_t size) {
 	}
 }
 
-idx_t PackedDB::load_reads(const ExtensionCandidateCompressed* const ec_list, const idx_t nec) {
+int64_t PackedDB::load_reads(const ExtensionCandidateCompressed* const ec_list, const int64_t nec) {
 	if (!pstream.is_open()) {	// all in memory already
 		return nec;
 	}
@@ -233,23 +233,23 @@ idx_t PackedDB::load_reads(const ExtensionCandidateCompressed* const ec_list, co
 	//
 	// get set of reads to read in (most that will fit in memory);
 	// use sorted set to speed reading (below)
-	std::set<idx_t> read_ids;
-	idx_t i(0), total_size(0);
+	std::set<int64_t> read_ids;
+	int64_t i(0), total_size(0);
 	while (i != nec) {
 		// find all alignments for a given read
 		// (use set to handle duplicate qids)
-		const idx_t sid(ec_list[i].sid);
-		const idx_t start(i);
-		std::set<idx_t> my_ids;
+		const int64_t sid(ec_list[i].sid);
+		const int64_t start(i);
+		std::set<int64_t> my_ids;
 		my_ids.insert(sid);
 		my_ids.insert(ec_list[i].qid);
 		for (++i; i != nec && ec_list[i].sid == sid; ++i) {
 			my_ids.insert(ec_list[i].qid);
 		}
 		// find size of new read additions
-		idx_t size(0);
-		std::set<idx_t>::const_iterator a(my_ids.begin());
-		const std::set<idx_t>::const_iterator end_a(my_ids.end());
+		int64_t size(0);
+		std::set<int64_t>::const_iterator a(my_ids.begin());
+		const std::set<int64_t>::const_iterator end_a(my_ids.end());
 		for (; a != end_a; ++a) {
 			if (read_ids.find(*a) == read_ids.end()) {
 				size += (seq_idx[*a].size + 3) / 4;
@@ -269,9 +269,9 @@ idx_t PackedDB::load_reads(const ExtensionCandidateCompressed* const ec_list, co
 		pac_ = new uint8_t[max_db_size];
 	}
 	// now read in the reads
-	std::set<idx_t>::const_iterator a(read_ids.begin());
-	const std::set<idx_t>::const_iterator end_a(read_ids.end());
-	idx_t pos(0);
+	std::set<int64_t>::const_iterator a(read_ids.begin());
+	const std::set<int64_t>::const_iterator end_a(read_ids.end());
+	int64_t pos(0);
 	off_t offset(-1);
 	for (; a != end_a; ++a) {
 		SeqIndex& si(seq_idx[*a]);
@@ -279,7 +279,7 @@ idx_t PackedDB::load_reads(const ExtensionCandidateCompressed* const ec_list, co
 		if (offset != si.file_offset && !pstream.seekg(si.file_offset)) {
 			ERROR("Error seeking on fasta db");
 		}
-		const idx_t bytes((si.size + 3) / 4);
+		const int64_t bytes((si.size + 3) / 4);
 		if (!pstream.read((char*)pac_ + pos, bytes)) {
 			ERROR("Error reading fasta db");
 		}
@@ -293,7 +293,7 @@ idx_t PackedDB::load_reads(const ExtensionCandidateCompressed* const ec_list, co
 	return i;
 }
 
-void PackedDB::read_sizes(const std::string& output_prefix, std::vector<idx_t>& sizes) {
+void PackedDB::read_sizes(const std::string& output_prefix, std::vector<int64_t>& sizes) {
 	const std::string pac_name(output_prefix + ".pac");
 	std::ifstream in(pac_name.c_str());
 	// pre-allocate index if possible
@@ -311,7 +311,7 @@ void PackedDB::read_sizes(const std::string& output_prefix, std::vector<idx_t>& 
 	}
 	const std::string index_name(output_prefix + ".idx");
 	open_fstream(in, index_name.c_str(), std::ios::in);
-	idx_t i, j;
+	int64_t i, j;
 	while (in >> i >> j) {
 		sizes.push_back(j);
 	}

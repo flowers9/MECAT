@@ -14,7 +14,7 @@ struct ReadsCorrectionOptions {
     const char* grid_options;
     const char* grid_options_split;
     int         num_threads;
-    int		batch_size;
+    size_t	batch_size;
     double      min_mapping_ratio;
     int         min_align_size;
     int         min_cov;

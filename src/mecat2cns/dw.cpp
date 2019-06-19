@@ -1,23 +1,67 @@
 #include "dw.h"
 
+#ifdef __SSE2__
+#include <emmintrin.h>	// _mm_loadu_si128(), _mm_xor_si128()
+#include <smmintrin.h>	// _mm_test_all_zeros()
+#endif
 #include <algorithm>	// copy(), fill()
 #include <vector>	// vector<>
 #include <stdint.h>	// uint8_t
 
 #define GAP_VAL 4
 
-static void fill_align(const std::string& query, const int q_offset, const std::string& target, const int t_offset, Alignment& align, const std::vector<DPathData>& d_path, const DPathData* d_path_aux, const std::vector<DPathIndex>& d_path_index, int d, std::vector<PathPoint>& aln_path, const int extend_forward) {
-	align.aln_q_e = d_path_aux->x2;
-	align.aln_t_e = d_path_aux->y2;
+#ifdef __SSE2__
+
+// bit_scan_forward definitions are taken from vectori128.h, part of
+// Agner Fog's vector class package version 1.28, and are copyright
+// by him (2017) (https://www.agner.org/optimize/#vectorclass)
+
+// Define bit-scan-forward function. Gives index to lowest set bit
+#if defined (__GNUC__) || defined(__clang__)
+static inline uint32_t bit_scan_forward(uint32_t a) __attribute__ ((pure));
+static inline uint32_t bit_scan_forward(uint32_t a) {
+	uint32_t r;
+	__asm("bsfl %1, %0" : "=r"(r) : "r"(a) : );
+	return r;
+}
+#else
+static inline uint32_t bit_scan_forward (uint32_t a) {
+	unsigned long r;
+	_BitScanForward(&r, a);		// defined in intrin.h for MS and Intel compilers
+	return r;
+}
+#endif
+
+// Define bit-scan-reverse function. Gives index to highest set bit.
+// Make sure to mask unused high bits
+#if defined (__GNUC__) || defined(__clang__)
+static inline uint32_t bit_scan_reverse(uint32_t a) __attribute__ ((pure));
+static inline uint32_t bit_scan_reverse(uint32_t a) {
+	uint32_t r;
+	__asm("bsrl %1, %0" : "=r"(r) : "r"(a) : );
+	return r;
+}
+#else
+static inline uint32_t bit_scan_reverse (uint32_t a) {
+	unsigned long r;
+	_BitScanReverse(&r, a);		// defined in intrin.h for MS and Intel compilers
+	return r;
+}
+#endif
+#endif	// __SSEE2__
+
+static void fill_align(const std::string& query, const int q_offset, const std::string& target, const int t_offset, Alignment& align, const std::vector<DPathData>& d_path, int i, const std::vector<DPathIndex>& d_path_index, int d, std::vector<PathPoint>& aln_path, const int extend_forward) {
+	align.aln_q_e = d_path[i].x2;
+	align.aln_t_e = d_path[i].y2;
 	// get align path
 	int aln_idx(-1);
 	for (;;) {
-		aln_path[++aln_idx].set(d_path_aux->x2, d_path_aux->y2);
-		aln_path[++aln_idx].set(d_path_aux->x1, d_path_aux->y1);
+		aln_path[++aln_idx].set(d_path[i].x2, d_path[i].y2);
+		aln_path[++aln_idx].set(d_path[i].x1, d_path[i].y1);
 		if (--d == -1) {
 			break;
 		}
-		d_path_aux = &d_path[d_path_index[d].d_offset + (d_path_aux->pre_k - d_path_index[d].min_k) / 2];
+		i = d_path_index[d].d_offset + (d_path[i].pre_k - d_path_index[d].min_k) / 2;
 	}
 	// walk backwards along align path to fill in sequence with gaps
 	align.clear();
@@ -83,6 +127,8 @@ static int Align(const int extend_size, const std::string& query, const int q_of
 	const int k_offset(extend_size * 4 * error_rate);
 	const int band_tolerance(extend_size * 3 / 10);
 	const int max_band_size(band_tolerance * 2 + 1);
+	const char* const q_ptr_start(query.data() + q_offset);
+	const char* const t_ptr_start(target.data() + t_offset);
 	int d_path_idx(0), best_combined_match_length(0);
 	int best(-1), best_score(-k_offset);
 	q_extent[k_offset + 1] = 0;	// initialize starting point
@@ -105,8 +151,37 @@ static int Align(const int extend_size, const std::string& query, const int q_of
 				// start of exact match
 				const int q_start(q_pos), t_start(t_pos);
 				// find the other end of exact match
-				// XXX - this loop could in theory be vectorized
+#ifdef __SSE2__
+				// vectorization of loop using gnu intrinsics
+				__m128i a16, b16, c16;
+				const char* q_ptr(q_ptr_start + q_pos);
+				const char* t_ptr(t_ptr_start + t_pos);
+				int i(0);
+				// round down to nearest multiple of 16
+				int end_i((extend_size - std::max(q_pos, t_pos)) & (~0xf));
+				for (; i != end_i; i += 16, q_ptr += 16, t_ptr += 16) {
+					a16 = _mm_loadu_si128((const __m128i*)q_ptr);
+					b16 = _mm_loadu_si128((const __m128i*)t_ptr);
+					c16 = _mm_cmpeq_epi8(a16, b16);
+					const uint32_t x(_mm_movemask_epi8(c16));
+					if (x != 0xffff) {
+						const int b(bit_scan_forward(~x));
+						q_ptr += b;
+						t_ptr += b;
+						// no need to increment i here, it's
+						// sufficient that it doesn't equal end_i
+						break;
+					}
+				}
+				if (i == end_i) {       // deal with remainder
+					end_i += (extend_size - std::max(q_pos, t_pos)) & 0xf;
+					for (; i != end_i && *q_ptr == *t_ptr; ++i, ++q_ptr, ++t_ptr) { }
+				}
+				q_pos = q_ptr - q_ptr_start;
+				t_pos = t_ptr - t_ptr_start;
+#else
 				for (; q_pos < extend_size && t_pos < extend_size && query[q_offset + q_pos] == target[t_offset + t_pos]; ++q_pos, ++t_pos) { }
+#endif	// __SSE2__
 				d_path[d_path_idx].set(q_start, t_start, q_pos, t_pos, pre_k);
 				// see if we reached the end
 				const int score(q_pos + t_pos);
@@ -122,7 +197,7 @@ static int Align(const int extend_size, const std::string& query, const int q_of
 				}
 			}
 			if (best != -1) {	// finished alignment
-				fill_align(query, q_offset, target, t_offset, align, d_path, &d_path[best], d_path_index, d, aln_path, extend_forward);
+				fill_align(query, q_offset, target, t_offset, align, d_path, best, d_path_index, d, aln_path, extend_forward);
 				return 1;
 			}
 			// shift ends to one outside "good" band
@@ -149,8 +224,39 @@ static int Align(const int extend_size, const std::string& query, const int q_of
 				// start of exact match
 				const int q_start(q_pos), t_start(t_pos);
 				// find the other end of exact match
-				// XXX - this loop could in theory be vectorized
+#ifdef __SSE2__
+				// vectorization of above loop
+				__m128i a16, b16, c16;
+				const char* q_ptr(q_ptr_start - q_pos - 15);
+				const char* t_ptr(t_ptr_start - t_pos - 15);
+				int i(0);
+				// round down to nearest multiple of 16
+				int end_i((extend_size - std::max(q_pos, t_pos)) & (~0xf));
+				for (; i != end_i; i += 16, q_ptr -= 16, t_ptr -= 16) {
+					a16 = _mm_loadu_si128((const __m128i*)q_ptr);
+					b16 = _mm_loadu_si128((const __m128i*)t_ptr);
+					c16 = _mm_cmpeq_epi8(a16, b16);
+					const uint32_t x(_mm_movemask_epi8(c16));
+					if (x != 0xffff) {
+						// have to mask high bits
+						const int b(bit_scan_reverse(0xffff & (~x)));
+						// technically, += 15 - (15 - b)
+						q_ptr += b;
+						t_ptr += b;
+						// no need to increment i here, it's
+						// sufficient that it doesn't equal end_i
+						break;
+					}
+				}
+				if (i == end_i) {       // deal with remainder
+					end_i += (extend_size - std::max(q_pos, t_pos)) & 0xf;
+					for (q_ptr += 15, t_ptr += 15; i != end_i && *q_ptr == *t_ptr; ++i, --q_ptr, --t_ptr) { }
+				}
+				q_pos = q_ptr_start - q_ptr;
+				t_pos = t_ptr_start - t_ptr;
+#else
 				for (; q_pos < extend_size && t_pos < extend_size && query[q_offset - q_pos] == target[t_offset - t_pos]; ++q_pos, ++t_pos) { }
+#endif	// __SSE2__
 				d_path[d_path_idx].set(q_start, t_start, q_pos, t_pos, pre_k);
 				// see if we reached the end
 				const int score(q_pos + t_pos);
@@ -166,7 +272,7 @@ static int Align(const int extend_size, const std::string& query, const int q_of
 				}
 			}
 			if (best != -1) {	// finished alignment
-				fill_align(query, q_offset, target, t_offset, align, d_path, &d_path[best], d_path_index, d, aln_path, extend_forward);
+				fill_align(query, q_offset, target, t_offset, align, d_path, best, d_path_index, d, aln_path, extend_forward);
 				return 1;
 			}
 			// shift ends to one outside "good" band

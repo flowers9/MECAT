@@ -18,11 +18,11 @@ static void* reads_correction_func_can(void* const arg) {
 	const int tid(data.get_thread_id());
 	ConsensusPerThreadData& pdata(data.data[tid]);
 	const ExtensionCandidateCompressed* const candidates((const ExtensionCandidateCompressed*)pdata.candidates);
-	idx_t i(pdata.next_candidate);
+	int64_t i(pdata.next_candidate);
 	if (data.rco.tech == TECH_PACBIO) {
 		while (i != pdata.num_candidates) {
-			const idx_t start(i);
-			const idx_t sid(candidates[start].sid);
+			const int64_t start(i);
+			const int64_t sid(candidates[start].sid);
 			for (++i; i != pdata.num_candidates && candidates[i].sid == sid; ++i) { }
 			// still have to check this here, as it's not always checked earlier
 			if (i - start < data.rco.min_cov) {
@@ -35,8 +35,8 @@ static void* reads_correction_func_can(void* const arg) {
 		}
 	} else {
 		while (i != pdata.num_candidates) {
-			const idx_t start(i);
-			const idx_t sid(candidates[start].sid);
+			const int64_t start(i);
+			const int64_t sid(candidates[start].sid);
 			for (++i; i != pdata.num_candidates && candidates[i].sid == sid; ++i) { }
 			if (i - start < data.rco.min_cov) {
 				continue;
@@ -59,9 +59,9 @@ struct CmpExtensionCandidateCompressedBySid {
 
 class EC_Index {	// offset into ec_list (and number of ecs) for each read id
     public:
-	idx_t offset, count;
+	int64_t offset, count;
 	explicit EC_Index() : offset(0), count(0) { }
-	explicit EC_Index(idx_t i, idx_t j) : offset(i), count(j) { }
+	explicit EC_Index(int64_t i, int64_t j) : offset(i), count(j) { }
 	~EC_Index() { }
 };
 
@@ -70,20 +70,20 @@ class EC_Index {	// offset into ec_list (and number of ecs) for each read id
 // candidates of reads with low coverage; we filter out alignments of
 // low-coverage reads, so nec may be reduced
 
-static void reorder_candidates(ExtensionCandidateCompressed* const ec_list, idx_t& nec, const idx_t reads_to_correct, const idx_t num_reads, const int min_cov) {
+static void reorder_candidates(ExtensionCandidateCompressed* const ec_list, int64_t& nec, const int64_t reads_to_correct, const int64_t num_reads, const int min_cov) {
 	// allow us to easily access a given sid's aligns
 	std::sort(ec_list, ec_list + nec, CmpExtensionCandidateCompressedBySid());
-	idx_t total_ec(0);
+	int64_t total_ec(0);
 	// count will be zero for any read id beyond reads_to_correct
 	std::vector<EC_Index> index(reads_to_correct);
 	// index existing list by sid
-	for (idx_t i(0); i != nec;) {
+	for (int64_t i(0); i != nec;) {
 		// we are guaranteed sid is < reads_to_correct by partitioning
-		const idx_t sid(ec_list[i].sid);
-		const idx_t start(i);
+		const int64_t sid(ec_list[i].sid);
+		const int64_t start(i);
 		for (++i; i != nec && ec_list[i].sid == sid; ++i) { }
 		// make sure we have enough coverage
-		const idx_t count(i - start);
+		const int64_t count(i - start);
 		if (count >= min_cov) {
 			index[sid] = EC_Index(start, count);
 			total_ec += count;
@@ -91,9 +91,9 @@ static void reorder_candidates(ExtensionCandidateCompressed* const ec_list, idx_
 	}
 	// generate the new read order
 	std::vector<char> used(num_reads, 0);
-	std::vector<idx_t> new_order;
+	std::vector<int64_t> new_order;
 	new_order.reserve(num_reads);	// possible overestimate, but whatever
-	idx_t next_unused(0);
+	int64_t next_unused(0);
 	size_t next_search(0);
 	for (;;) {
 		// skip over used reads, reads with no alignments
@@ -105,14 +105,14 @@ static void reorder_candidates(ExtensionCandidateCompressed* const ec_list, idx_
 		new_order.push_back(next_unused);
 		// add all reads aligned to, and aligned to those, and so on
 		for (; next_search != new_order.size(); ++next_search) {
-			const idx_t sid(new_order[next_search]);
+			const int64_t sid(new_order[next_search]);
 			// make sure read has index entry
 			if (sid < reads_to_correct) {
 				const EC_Index& a(index[sid]);
-				idx_t i(a.offset);
-				const idx_t end_i(i + a.count);
+				int64_t i(a.offset);
+				const int64_t end_i(i + a.count);
 				for (; i != end_i; ++i) {
-					const idx_t qid(ec_list[i].qid);
+					const int64_t qid(ec_list[i].qid);
 					if (!used[qid]) {
 						used[qid] = 1;
 						new_order.push_back(qid);
@@ -124,7 +124,7 @@ static void reorder_candidates(ExtensionCandidateCompressed* const ec_list, idx_
 	// re-sort ec_list with new order (note that coverage-excluded
 	// ec's will sort last, so we also change nec to exclude them);
 	// sort reads not used (no new_order entry) at end
-	std::vector<idx_t> rid_to_order(num_reads, std::numeric_limits<idx_t>::max());
+	std::vector<int64_t> rid_to_order(num_reads, std::numeric_limits<int64_t>::max());
 	for (size_t i(0); i != new_order.size(); ++i) {
 		rid_to_order[new_order[i]] = i;
 	}
@@ -135,7 +135,7 @@ static void reorder_candidates(ExtensionCandidateCompressed* const ec_list, idx_
 
 // load and sort partition data, assign to threads, start threads
 static void consensus_one_partition_can(const char* const m4_file_name, ConsensusThreadData& data) {
-	idx_t nec;
+	int64_t nec;
 	ExtensionCandidateCompressed* ec_list(load_partition_data<ExtensionCandidateCompressed>(m4_file_name, nec));
 	// if we're memory limited spend some cpu time to speed up passes
 	// (~16s for ~300s speedup in test case)
@@ -149,7 +149,7 @@ static void consensus_one_partition_can(const char* const m4_file_name, Consensu
 		// see how many candidates we can run, given
 		// how much read sequence we can load into memory
 		// (unless we're not limited, in which case load 'em all)
-		const idx_t ecs(data.rco.read_buffer_size ? data.reads.load_reads(ec_list + data.ec_offset, nec - data.ec_offset) : nec);
+		const int64_t ecs(data.rco.read_buffer_size ? data.reads.load_reads(ec_list + data.ec_offset, nec - data.ec_offset) : nec);
 		allocate_ecs(data, ec_list + data.ec_offset, ecs);
 		for (int i(0); i != data.rco.num_threads; ++i) {
 			pthread_create(&thread_ids[i], NULL, reads_correction_func_can, static_cast<void*>(&data));
@@ -187,7 +187,7 @@ static int reads_correction_can_p(ReadsCorrectionOptions& rco, std::vector<std::
 	DynamicTimer dtimer(process_info);
 	consensus_one_partition_can(p.c_str(), data);
 	close_fstream(out);
-	assert(rename(results_file_tmp.c_str(), results_file.c_str()));
+	assert(rename(results_file_tmp.c_str(), results_file.c_str()) == 0);
 	return 0;
 }
 
@@ -226,7 +226,7 @@ int reads_correction_can(ReadsCorrectionOptions& rco) {
 			consensus_one_partition_can(p.c_str(), data);
 		}
 		close_fstream(out);
-		assert(rename(tmp_file.c_str(), rco.corrected_reads));
+		assert(rename(tmp_file.c_str(), rco.corrected_reads) == 0);
 	}
 	return 0;
 }

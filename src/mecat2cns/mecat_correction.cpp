@@ -32,16 +32,16 @@ static inline uint8_t identify_one_consensus_item(const CnsTableItem& cns_item) 
 
 struct CompareOverlapByOverlapSize {
 	bool operator()(const Overlap& a, const Overlap& b) {
-		const idx_t ovlp_a(std::max(a.qend - a.qoff, a.send - a.soff));
-		const idx_t ovlp_b(std::max(b.qend - b.qoff, b.send - b.soff));
+		const int64_t ovlp_a(std::max(a.qend - a.qoff, a.send - a.soff));
+		const int64_t ovlp_b(std::max(b.qend - b.qoff, b.send - b.soff));
 		return ovlp_b < ovlp_a;
 	}
 };
 
-static void meap_add_one_aln(const std::string& qaln, const std::string& saln, idx_t start_soff, std::vector<CnsTableItem>& cns_table) {
+static void meap_add_one_aln(const std::string& qaln, const std::string& saln, int64_t start_soff, std::vector<CnsTableItem>& cns_table) {
 	assert(qaln.size() == saln.size());
-	const idx_t aln_size(qaln.size());
-	for (idx_t i(0); i < aln_size;) {
+	const int64_t aln_size(qaln.size());
+	for (int64_t i(0); i < aln_size;) {
 		const char q(qaln[i]);
 		const char s(saln[i]);
 		if (q == GAP_CHAR && s == GAP_CHAR) {	// skip
@@ -168,7 +168,7 @@ static void get_effective_ranges(std::vector<MappingRange>& mranges, std::vector
 // breaks output sequence into chunks of no more than MaxSeqSize (if needed);
 // split chunks will have an OvlpSize overlap
 
-static void output_cns_result(std::vector<CnsResult>& cns_results, CnsResult& cr, const idx_t beg, const idx_t end, const std::string& cns_seq) {
+static void output_cns_result(std::vector<CnsResult>& cns_results, CnsResult& cr, const int64_t beg, const int64_t end, const std::string& cns_seq) {
 	const size_t MaxSeqSize = 60000;
 	const size_t OvlpSize = 10000;
 	// BlkSize must be >= OvlpSize
@@ -207,16 +207,16 @@ static inline bool check_ovlp_mapping_range(const int qb, const int qe, const in
 static void consensus_worker(const std::vector<CnsTableItem>& cns_table, std::vector<uint8_t>& id_list, CnsAlns& cns_vec, std::string& aux_qstr, std::string& aux_tstr, const std::vector<MappingRange>& eranges, const int min_cov, const int min_size, const int read_id, std::vector<CnsResult>& cns_results) {
 	CnsResult cns_result;
 	cns_result.id = read_id;
-	const idx_t min_size_95(ceil(0.95 * min_size));
+	const int64_t min_size_95(ceil(0.95 * min_size));
 	std::string cns_seq;
 	std::vector<MappingRange>::const_iterator a(eranges.begin());
 	const std::vector<MappingRange>::const_iterator end_a(eranges.end());
 	for (; a != end_a; ++a) {
 		const int end_i(a->end);
-		for (idx_t i(a->start); i < end_i;) {
+		for (int64_t i(a->start); i < end_i;) {
 			// find start of next high coverage area
 			for (; i < end_i && cns_table[i].mat_cnt + cns_table[i].ins_cnt < min_cov; ++i) { }
-			const idx_t start(i);
+			const int64_t start(i);
 			// find end of high coverage area
 			for (++i; i < end_i && cns_table[i].mat_cnt + cns_table[i].ins_cnt >= min_cov; ++i) { }
 			if (i - start >= min_size_95) {
@@ -229,7 +229,7 @@ static void consensus_worker(const std::vector<CnsTableItem>& cns_table, std::ve
 	}
 }
 
-static void decode_and_append_sequence(std::string& s, const std::string& seq, idx_t i, const idx_t end_i) {
+static void decode_and_append_sequence(std::string& s, const std::string& seq, int64_t i, const int64_t end_i) {
 	s.reserve(s.size() + end_i - i);
 	for (; i < end_i; ++i) {
 		s += "ACGT"[static_cast<int>(seq[i])];
@@ -242,7 +242,7 @@ static void decode_and_append_sequence(std::string& s, const std::string& seq, i
 static void consensus_worker_one_read(const std::vector<CnsTableItem>& cns_table, std::vector<uint8_t>& id_list, CnsAlns& cns_vec, std::string& aux_qstr, std::string& aux_tstr, const std::vector<MappingRange>& eranges, const int min_cov, const int min_size, const int read_id, const std::string& tstr, std::vector<CnsResult>& cns_results) {
 	CnsResult cns_result;
 	cns_result.id = read_id;
-	const idx_t min_size_95(std::max<int>(ceil(0.95 * min_size), 1) - 1);
+	const int64_t min_size_95(std::max<int>(ceil(0.95 * min_size), 1) - 1);
 	std::string cns_seq;
 	std::vector<MappingRange>::const_iterator a(eranges.begin());
 	const std::vector<MappingRange>::const_iterator end_a(eranges.end());
@@ -255,16 +255,16 @@ static void consensus_worker_one_read(const std::vector<CnsTableItem>& cns_table
 		}
 		const int begin_i(a->start - 1);
 		const int end_i(a->end);
-		for (idx_t i(begin_i); i < end_i;) {
+		for (int64_t i(begin_i); i < end_i;) {
 			// find start of next high coverage area
-			const idx_t last_end(i != begin_i ? i : a->start);
+			const int64_t last_end(i != begin_i ? i : a->start);
 			for (++i; i < end_i && cns_table[i].mat_cnt + cns_table[i].ins_cnt < min_cov; ++i) { }
 			// add low coverage area as-is
 			decode_and_append_sequence(cns_result.seq, tstr, last_end, i);
 			if (i == end_i) {
 				break;
 			}
-			const idx_t start(i);
+			const int64_t start(i);
 			// find end of high coverage area
 			for (++i; i < end_i && cns_table[i].mat_cnt + cns_table[i].ins_cnt >= min_cov; ++i) { }
 			if (i - start > min_size_95) {
@@ -288,14 +288,14 @@ static void consensus_worker_one_read(const std::vector<CnsTableItem>& cns_table
 	cns_results.push_back(cns_result);
 }
 
-void consensus_one_read_m4_pacbio(ConsensusThreadData& ctd, ConsensusPerThreadData &pctd, const idx_t read_id, const idx_t sid, const idx_t eid) {
+void consensus_one_read_m4_pacbio(ConsensusThreadData& ctd, ConsensusPerThreadData &pctd, const int64_t read_id, const int64_t sid, const int64_t eid) {
 	PackedDB& reads(ctd.reads);
 	ExtensionCandidate* overlaps((ExtensionCandidate*)pctd.candidates);
 	DiffRunningData& drd(pctd.drd);
 	M5Record& m5(pctd.m5);
 	CnsAlns& cns_vec(pctd.cns_alns);
 	std::vector<CnsResult>& cns_results(pctd.cns_results);
-	const idx_t read_size(overlaps[read_id].ssize);
+	const int64_t read_size(overlaps[read_id].ssize);
 	std::string& qstr(pctd.query);
 	std::string& tstr(pctd.target);
 	reads.GetSequence(read_id, 1, tstr);
@@ -307,15 +307,15 @@ void consensus_one_read_m4_pacbio(ConsensusThreadData& ctd, ConsensusPerThreadDa
 	std::vector<CnsTableItem>& cns_table(pctd.cns_table);
 	cns_table.assign(read_size, CnsTableItem());	// reset table
 	cns_vec.clear();
-	const idx_t L(sid);
-	const idx_t R(eid - sid <= max_added ? eid : L + max_added);
+	const int64_t L(sid);
+	const int64_t R(eid - sid <= max_added ? eid : L + max_added);
 	if (eid - sid > max_added) {	// only use largest max_added overlaps
 		std::sort(overlaps + sid, overlaps + eid, CompareOverlapByOverlapSize());
 	}
-	for (idx_t i(L); i < R; ++i) {
+	for (int64_t i(L); i < R; ++i) {
 		Overlap& ovlp(overlaps[i]);
 		reads.GetSequence(ovlp.qid, ovlp.qdir == FWD, qstr);
-		const idx_t qext(ovlp.qdir == FWD ? ovlp.qext : ovlp.qsize - 1 - ovlp.qext);
+		const int64_t qext(ovlp.qdir == FWD ? ovlp.qext : ovlp.qsize - 1 - ovlp.qext);
 		const int r(GetAlignment(qstr, qext, tstr, ovlp.sext, drd, m5, error_rate, min_align_size));
 		if (r) {
 			normalize_gaps(m5.qaln, m5.saln, nqstr, ntstr, 1);
@@ -329,14 +329,14 @@ void consensus_one_read_m4_pacbio(ConsensusThreadData& ctd, ConsensusPerThreadDa
 	consensus_worker(cns_table, pctd.id_list, cns_vec, nqstr, ntstr, eranges, ctd.rco.min_cov, ctd.rco.min_size, read_id, cns_results);
 }
 
-void consensus_one_read_m4_nanopore(ConsensusThreadData& ctd, ConsensusPerThreadData &pctd, const idx_t read_id, const idx_t sid, const idx_t eid) {
+void consensus_one_read_m4_nanopore(ConsensusThreadData& ctd, ConsensusPerThreadData &pctd, const int64_t read_id, const int64_t sid, const int64_t eid) {
 	PackedDB& reads = ctd.reads;
 	ExtensionCandidate* overlaps = (ExtensionCandidate*)pctd.candidates;
 	DiffRunningData& drd = pctd.drd;
 	M5Record& m5 = pctd.m5;
 	CnsAlns& cns_vec = pctd.cns_alns;
 	std::vector<CnsResult>& cns_results = pctd.cns_results;
-	const idx_t read_size = overlaps[read_id].ssize;
+	const int64_t read_size = overlaps[read_id].ssize;
 	std::string& qstr = pctd.query;
 	std::string& tstr = pctd.target;
 	reads.GetSequence(read_id, 1, tstr);
@@ -346,7 +346,7 @@ void consensus_one_read_m4_nanopore(ConsensusThreadData& ctd, ConsensusPerThread
 	const double error_rate(ctd.rco.error_rate);
 	const double min_mapping_ratio = ctd.rco.min_mapping_ratio - 0.02;
 
-	idx_t L, R;
+	int64_t L, R;
 	if (eid - sid <= MAX_CNS_OVLPS)
 	{
 		L = sid;
@@ -362,10 +362,10 @@ void consensus_one_read_m4_nanopore(ConsensusThreadData& ctd, ConsensusPerThread
 	std::vector<CnsTableItem>& cns_table = pctd.cns_table;
 	cns_table.assign(read_size, CnsTableItem());	// reset table
 	cns_vec.clear();
-	for (idx_t i(L); i < R; ++i) {
+	for (int64_t i(L); i < R; ++i) {
 		Overlap& ovlp(overlaps[i]);
 		reads.GetSequence(ovlp.qid, ovlp.qdir == FWD, qstr);
-		const idx_t qext(ovlp.qdir == FWD ? ovlp.qext : ovlp.qsize - 1 - qext);
+		const int64_t qext(ovlp.qdir == FWD ? ovlp.qext : ovlp.qsize - 1 - qext);
 		const int r(GetAlignment(qstr, qext, tstr, ovlp.sext, drd, m5, error_rate, min_align_size));
 		if (r && check_ovlp_mapping_range(m5.qoff, m5.qend, ovlp.qsize, m5.soff, m5.send, ovlp.ssize, min_mapping_ratio)) {
 			normalize_gaps(m5.qaln, m5.saln, nqstr, ntstr, 1);
@@ -405,14 +405,14 @@ static inline int check_cov_stats(std::vector<uint8_t>& cov_stats, const int sof
 	return 0;
 }
 
-void consensus_one_read_can_pacbio(ConsensusThreadData& ctd, ConsensusPerThreadData& pctd, const idx_t read_id, const idx_t sid, idx_t eid) {
+void consensus_one_read_can_pacbio(ConsensusThreadData& ctd, ConsensusPerThreadData& pctd, const int64_t read_id, const int64_t sid, int64_t eid) {
 	const PackedDB& reads(ctd.reads);
 	ExtensionCandidateCompressed* candidates((ExtensionCandidateCompressed*)pctd.candidates);
 	DiffRunningData& drd(pctd.drd);
 	M5Record& m5(pctd.m5);
 	CnsAlns& cns_vec(pctd.cns_alns);
 	std::vector<CnsResult>& cns_results(pctd.cns_results);
-	const idx_t ssize(reads.read_size(read_id));
+	const int64_t ssize(reads.read_size(read_id));
 	std::string& qstr(pctd.query);
 	std::string& tstr(pctd.target);
 	reads.GetSequence(read_id, 1, tstr);
@@ -427,17 +427,17 @@ void consensus_one_read_can_pacbio(ConsensusThreadData& ctd, ConsensusPerThreadD
 	std::vector<CnsTableItem>& cns_table(pctd.cns_table);
 	cns_table.assign(ssize, CnsTableItem());		// reset table
 	cns_vec.clear();
-	std::set<idx_t> used_ids;
+	std::set<int64_t> used_ids;
 	std::vector<uint8_t>& id_list(pctd.id_list);		// used to be called cov_stats
 	id_list.clear();
-	for (idx_t i(sid); i < eid && num_added < max_added; ++i) {
+	for (int64_t i(sid); i < eid && num_added < max_added; ++i) {
 		const ExtensionCandidateCompressed& ec(candidates[i]);
 		if (used_ids.find(ec.qid) != used_ids.end()) {
 			continue;
 		}
-		const idx_t qsize(reads.read_size(ec.qid));
+		const int64_t qsize(reads.read_size(ec.qid));
 		reads.GetSequence(ec.qid, ec.qdir() == FWD, qstr);
-		const idx_t qext(ec.qdir() == FWD ? ec.qext() : qsize - 1 - ec.qext());
+		const int64_t qext(ec.qdir() == FWD ? ec.qext() : qsize - 1 - ec.qext());
 		const int r(GetAlignment(qstr, qext, tstr, ec.sext, drd, m5, error_rate, min_align_size));
 		if (r && check_ovlp_mapping_range(m5.qoff, m5.qend, qsize, m5.soff, m5.send, ssize, min_mapping_ratio)) {
 			if (check_cov_stats(id_list, m5.soff, m5.send)) {
@@ -459,14 +459,14 @@ void consensus_one_read_can_pacbio(ConsensusThreadData& ctd, ConsensusPerThreadD
 	}
 }
 
-void consensus_one_read_can_nanopore(ConsensusThreadData& ctd, ConsensusPerThreadData &pctd, const idx_t read_id, const idx_t sid, const idx_t eid) {
+void consensus_one_read_can_nanopore(ConsensusThreadData& ctd, ConsensusPerThreadData &pctd, const int64_t read_id, const int64_t sid, const int64_t eid) {
 	PackedDB& reads(ctd.reads);
 	ExtensionCandidateCompressed* candidates((ExtensionCandidateCompressed*)pctd.candidates);
 	DiffRunningData& drd(pctd.drd);
 	M5Record& m5(pctd.m5);
 	CnsAlns& cns_vec(pctd.cns_alns);
 	std::vector<CnsResult>& cns_results(pctd.cns_results);
-	const idx_t ssize(reads.read_size(read_id));
+	const int64_t ssize(reads.read_size(read_id));
 	std::string& qstr(pctd.query);
 	std::string& tstr(pctd.target);
 	reads.GetSequence(read_id, 1, tstr);
@@ -484,15 +484,15 @@ void consensus_one_read_can_nanopore(ConsensusThreadData& ctd, ConsensusPerThrea
 	std::set<int> used_ids;
 	std::vector<uint8_t>& id_list(pctd.id_list);	// used to be called cov_stats
 	id_list.clear();
-	for (idx_t i(sid); i < eid && num_added < MAX_CNS_OVLPS && num_ext < max_ext; ++i) {
+	for (int64_t i(sid); i < eid && num_added < MAX_CNS_OVLPS && num_ext < max_ext; ++i) {
 		++num_ext;
 		const ExtensionCandidateCompressed& ec(candidates[i]);
 		if (used_ids.find(ec.qid) != used_ids.end()) {
 			continue;
 		}
-		const idx_t qsize(reads.read_size(ec.qid));
+		const int64_t qsize(reads.read_size(ec.qid));
 		reads.GetSequence(ec.qid, ec.qdir() == FWD, qstr);
-		const idx_t qext(ec.qdir() == FWD ? ec.qext() : qsize - 1 - ec.qext());
+		const int64_t qext(ec.qdir() == FWD ? ec.qext() : qsize - 1 - ec.qext());
 		const int r(GetAlignment(qstr, qext, tstr, ec.sext, drd, m5, error_rate, min_align_size));
 		if (r && check_ovlp_mapping_range(m5.qoff, m5.qend, qsize, m5.soff, m5.send, ssize, min_mapping_ratio)) {
 			if (check_cov_stats(id_list, m5.soff, m5.send)) {
