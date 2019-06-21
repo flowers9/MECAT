@@ -7,6 +7,7 @@
 #include <algorithm>	// copy(), fill()
 #include <vector>	// vector<>
 #include <stdint.h>	// uint8_t
+#include <iostream>
 
 #define GAP_VAL 4
 
@@ -18,31 +19,31 @@
 
 // Define bit-scan-forward function. Gives index to lowest set bit
 #if defined (__GNUC__) || defined(__clang__)
-static inline uint32_t bit_scan_forward(uint32_t a) __attribute__ ((pure));
-static inline uint32_t bit_scan_forward(uint32_t a) {
+static inline uint32_t bit_scan_forward(const uint32_t a) __attribute__ ((pure));
+static inline uint32_t bit_scan_forward(const uint32_t a) {
 	uint32_t r;
 	__asm("bsfl %1, %0" : "=r"(r) : "r"(a) : );
 	return r;
 }
 #else
-static inline uint32_t bit_scan_forward (uint32_t a) {
+static inline uint32_t bit_scan_forward (const uint32_t a) {
 	unsigned long r;
 	_BitScanForward(&r, a);		// defined in intrin.h for MS and Intel compilers
 	return r;
 }
 #endif
 
-// Define bit-scan-reverse function. Gives index to highest set bit.
-// Make sure to mask unused high bits
+// Define bit-scan-reverse function. Gives index to highest set bit
+// (make sure to zero out unused high bits)
 #if defined (__GNUC__) || defined(__clang__)
-static inline uint32_t bit_scan_reverse(uint32_t a) __attribute__ ((pure));
-static inline uint32_t bit_scan_reverse(uint32_t a) {
+static inline uint32_t bit_scan_reverse(const uint32_t a) __attribute__ ((pure));
+static inline uint32_t bit_scan_reverse(const uint32_t a) {
 	uint32_t r;
 	__asm("bsrl %1, %0" : "=r"(r) : "r"(a) : );
 	return r;
 }
 #else
-static inline uint32_t bit_scan_reverse (uint32_t a) {
+static inline uint32_t bit_scan_reverse (const uint32_t a) {
 	unsigned long r;
 	_BitScanReverse(&r, a);		// defined in intrin.h for MS and Intel compilers
 	return r;
@@ -151,37 +152,38 @@ static int Align(const int extend_size, const std::string& query, const int q_of
 				// start of exact match
 				const int q_start(q_pos), t_start(t_pos);
 				// find the other end of exact match
+				const char* q_ptr(q_ptr_start + q_pos);
+				const char* t_ptr(t_ptr_start + t_pos);
 #ifdef __SSE2__
 				// vectorization of loop using gnu intrinsics
 				__m128i a16, b16, c16;
-				const char* q_ptr(q_ptr_start + q_pos);
-				const char* t_ptr(t_ptr_start + t_pos);
-				int i(0);
 				// round down to nearest multiple of 16
-				int end_i((extend_size - std::max(q_pos, t_pos)) & (~0xf));
-				for (; i != end_i; i += 16, q_ptr += 16, t_ptr += 16) {
+				const char* end_q(q_ptr + ((extend_size - std::max(q_pos, t_pos)) & (~0xf)));
+				for (; q_ptr != end_q; q_ptr += 16, t_ptr += 16) {
+					// load vector registers
 					a16 = _mm_loadu_si128((const __m128i*)q_ptr);
 					b16 = _mm_loadu_si128((const __m128i*)t_ptr);
-					c16 = _mm_cmpeq_epi8(a16, b16);
+					c16 = _mm_cmpeq_epi8(a16, b16);	// compare registers
+					// create mask with 1 == true for each position
 					const uint32_t x(_mm_movemask_epi8(c16));
+					// if not all true, find first false
 					if (x != 0xffff) {
 						const int b(bit_scan_forward(~x));
 						q_ptr += b;
 						t_ptr += b;
-						// no need to increment i here, it's
-						// sufficient that it doesn't equal end_i
 						break;
 					}
 				}
-				if (i == end_i) {       // deal with remainder
-					end_i += (extend_size - std::max(q_pos, t_pos)) & 0xf;
-					for (; i != end_i && *q_ptr == *t_ptr; ++i, ++q_ptr, ++t_ptr) { }
+				if (q_ptr == end_q) {       // deal with remainder
+					end_q += (extend_size - std::max(q_pos, t_pos)) & 0xf;
+					for (; q_ptr != end_q && *q_ptr == *t_ptr; ++q_ptr, ++t_ptr) { }
 				}
+#else
+				const char* const end_q(q_ptr + extend_size - std::max(q_pos, t_pos));
+				for (; q_ptr != end_q && *q_ptr == *t_ptr; ++q_ptr, ++t_ptr) { }
+#endif	// __SSE2__
 				q_pos = q_ptr - q_ptr_start;
 				t_pos = t_ptr - t_ptr_start;
-#else
-				for (; q_pos < extend_size && t_pos < extend_size && query[q_offset + q_pos] == target[t_offset + t_pos]; ++q_pos, ++t_pos) { }
-#endif	// __SSE2__
 				d_path[d_path_idx].set(q_start, t_start, q_pos, t_pos, pre_k);
 				// see if we reached the end
 				const int score(q_pos + t_pos);
@@ -229,34 +231,39 @@ static int Align(const int extend_size, const std::string& query, const int q_of
 				__m128i a16, b16, c16;
 				const char* q_ptr(q_ptr_start - q_pos - 15);
 				const char* t_ptr(t_ptr_start - t_pos - 15);
-				int i(0);
 				// round down to nearest multiple of 16
-				int end_i((extend_size - std::max(q_pos, t_pos)) & (~0xf));
-				for (; i != end_i; i += 16, q_ptr -= 16, t_ptr -= 16) {
+				const char* end_q(q_ptr - ((extend_size - std::max(q_pos, t_pos)) & (~0xf)));
+				for (; q_ptr != end_q; q_ptr -= 16, t_ptr -= 16) {
+					// load vector registers
 					a16 = _mm_loadu_si128((const __m128i*)q_ptr);
 					b16 = _mm_loadu_si128((const __m128i*)t_ptr);
-					c16 = _mm_cmpeq_epi8(a16, b16);
+					c16 = _mm_cmpeq_epi8(a16, b16);	// compare registers
+					// create mask with 1 == true for each position
 					const uint32_t x(_mm_movemask_epi8(c16));
+					// if not all true, find first false
 					if (x != 0xffff) {
 						// have to mask high bits
 						const int b(bit_scan_reverse(0xffff & (~x)));
 						// technically, += 15 - (15 - b)
 						q_ptr += b;
 						t_ptr += b;
-						// no need to increment i here, it's
-						// sufficient that it doesn't equal end_i
 						break;
 					}
 				}
-				if (i == end_i) {       // deal with remainder
-					end_i += (extend_size - std::max(q_pos, t_pos)) & 0xf;
-					for (q_ptr += 15, t_ptr += 15; i != end_i && *q_ptr == *t_ptr; ++i, --q_ptr, --t_ptr) { }
+				if (q_ptr == end_q) {       // deal with remainder
+					q_ptr += 15;
+					t_ptr += 15;
+					end_q = q_ptr - ((extend_size - std::max(q_pos, t_pos)) & 0xf);
+					for (; q_ptr != end_q && *q_ptr == *t_ptr; --q_ptr, --t_ptr) { }
 				}
+#else
+				const char* q_ptr(q_ptr_start - q_pos);
+				const char* t_ptr(t_ptr_start - t_pos);
+				const char* const end_q(q_ptr - extend_size + std::max(q_pos, t_pos));
+				for (; q_ptr != end_q && *q_ptr == *t_ptr; --q_ptr, --t_ptr) { }
+#endif	// __SSE2__
 				q_pos = q_ptr_start - q_ptr;
 				t_pos = t_ptr_start - t_ptr;
-#else
-				for (; q_pos < extend_size && t_pos < extend_size && query[q_offset - q_pos] == target[t_offset - t_pos]; ++q_pos, ++t_pos) { }
-#endif	// __SSE2__
 				d_path[d_path_idx].set(q_start, t_start, q_pos, t_pos, pre_k);
 				// see if we reached the end
 				const int score(q_pos + t_pos);
