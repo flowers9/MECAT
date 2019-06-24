@@ -2,7 +2,6 @@
 #define ALIGNMENT_H
 
 #include <fstream>
-#include <limits>	// numeric_limits<>
 
 #include "defs.h"
 
@@ -44,7 +43,9 @@ struct ExtensionCandidateCompressed {
 		qext_ = a.sdir == a.qdir ? a.sext : a.sext | MSB_;
 		score = a.score;
 	}
-	// to check conversions from type int; need to use int64_t in case
+	// (these two are set in alignment.cpp, as std::numeric_limits<>
+	// can't be used at compile time)
+	// used to check conversions from type int; need to use int64_t in case
 	// int is only int32_t in size (which wouldn't hold uint32_t max)
 	static const int64_t max_value;
 	// account for using MSB for qdir

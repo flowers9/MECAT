@@ -95,7 +95,7 @@ static void generate_partition_file_name(const std::string& input_file_name, con
 	ret = input_file_name + ".part" + os.str();
 }
 
-void partition_candidates(const std::string& input, const std::string& pac_prefix, const size_t batch_size, const int num_files, const int64_t num_reads) {
+void partition_candidates(const std::string& input, const std::string& pac_prefix, const size_t file_size, const int max_files_per_batch, const int64_t num_reads) {
 	DynamicTimer dtimer(__func__);
 	struct stat buf;
 	if (stat(input.c_str(), &buf) == -1) {
@@ -103,16 +103,16 @@ void partition_candidates(const std::string& input, const std::string& pac_prefi
 	}
 	// each candidate line takes on average 44 characters, but go with 32;
 	// each one produces two candidates (forward and reverse)
-	const int64_t num_batches(ceil(double(buf.st_size) / 32 * 2 * sizeof(ExtensionCandidateCompressed) / batch_size));
-	// separate them by read id on this pass, as we don't know how
-	// many candidates each read is part of; we're assuming an even
-	// distribution on average
-	const int64_t reads_per_batch((num_reads + num_batches - 1) / num_batches);
+	const int num_files(ceil(double(buf.st_size / 32 * 2) * sizeof(ExtensionCandidateCompressed) / file_size));
+	// separate them by read id as we don't know how many candidates each
+	// read is part of; we're assuming an even distribution on average
+	const int64_t reads_per_file((num_reads + num_files - 1) / num_files);
 	std::vector<int64_t> read_sizes;
 	PackedDB::read_sizes(pac_prefix, read_sizes);
-	PartitionResultsWriter<ExtensionCandidateCompressed> prw(num_files);
+	PartitionResultsWriter<ExtensionCandidateCompressed> prw(max_files_per_batch);
 	int i(0);
 	off_t input_pos;
+	// if restarting, both i and input_pos can be changed
 	int is_restart(prw.restart(input, generate_partition_file_name, "partition.done", i, input_pos));
 	std::string idx_file_name;
 	generate_partition_index_file_name(input, idx_file_name);
@@ -120,14 +120,14 @@ void partition_candidates(const std::string& input, const std::string& pac_prefi
 	open_fstream(idx_file, idx_file_name.c_str(), std::ios::out);
 	ExtensionCandidate ec;
 	ExtensionCandidateCompressed nec;
-	// and here we go through the input file num_batches times,
+	// and here we go through the input file to write num_files,
 	// being limited by the number of open output files we can have
-	for (; i < num_batches; i += prw.kNumFiles) {
-		const int64_t sfid(i);
-		const int64_t efid(std::min(sfid + prw.kNumFiles, num_batches));
+	for (; i < num_files; i += prw.kNumFiles) {
+		const int sfid(i);
+		const int efid(std::min(sfid + prw.kNumFiles, num_files));
 		const int nf(efid - sfid);
-		const int64_t L(sfid * reads_per_batch);
-		const int64_t R(std::min(efid * reads_per_batch, num_reads));
+		const int64_t L(sfid * reads_per_file);
+		const int64_t R(std::min(efid * reads_per_file, num_reads));
 		std::ifstream in;
 		open_fstream(in, input.c_str(), std::ios::in);
 		if (is_restart) {
@@ -150,18 +150,18 @@ void partition_candidates(const std::string& input, const std::string& pac_prefi
 			assert(ec.sid <= ExtensionCandidateCompressed::max_value);
 			assert(ec.qid <= ExtensionCandidateCompressed::max_value);
 			assert(ec.sext <= ExtensionCandidateCompressed::max_value);
+			assert(ec.score <= ExtensionCandidateCompressed::max_value);
 			// qext is one bit smaller than the others
 			assert(ec.qext <= ExtensionCandidateCompressed::max_qext);
-			assert(ec.score <= ExtensionCandidateCompressed::max_value);
 			if (L <= ec.sid && ec.sid < R) {
 				nec.set(ec);
-				if (prw.WriteOneResult((nec.sid - L) / reads_per_batch, nec.sid, nec)) {
+				if (prw.WriteOneResult((nec.sid - L) / reads_per_file, nec.sid, nec)) {
 					prw.checkpoint(in.tellg());
 				}
 			}
 			if (L <= ec.qid && ec.qid < R) {
 				nec.set_swap(ec);
-				if (prw.WriteOneResult((nec.sid - L) / reads_per_batch, nec.sid, nec)) {
+				if (prw.WriteOneResult((nec.sid - L) / reads_per_file, nec.sid, nec)) {
 					prw.checkpoint(in.tellg());
 				}
 			}
@@ -178,7 +178,7 @@ void partition_candidates(const std::string& input, const std::string& pac_prefi
 	prw.finalize();
 }
 
-void partition_m4records(const char* const m4_file_name, const double min_cov_ratio, const size_t batch_size, const int min_read_size, const int num_files) {
+void partition_m4records(const char* const m4_file_name, const double min_cov_ratio, const size_t file_size, const int min_read_size, const int max_files_per_batch) {
 	DynamicTimer dtimer(__func__);
 	int64_t num_reads(get_qualified_m4record_counts(m4_file_name, min_cov_ratio));
 	std::set<int64_t> repeat_reads;
@@ -187,21 +187,21 @@ void partition_m4records(const char* const m4_file_name, const double min_cov_ra
 	if (stat(m4_file_name, &buf) == -1) {
 		ERROR("Could not get file size: %s", m4_file_name);
 	}
-	const int64_t num_batches(ceil(double(buf.st_size) / 32 * 2 * sizeof(ExtensionCandidate) / batch_size));
-	const int64_t reads_per_batch((num_reads + num_batches - 1) / num_batches);
+	const int num_files(ceil(double(buf.st_size / 32 * 2) * sizeof(ExtensionCandidate) / file_size));
+	const int64_t reads_per_file((num_reads + num_files - 1) / num_files);
 	std::string idx_file_name;
 	generate_partition_index_file_name(m4_file_name, idx_file_name);
 	std::ofstream idx_file;
 	open_fstream(idx_file, idx_file_name.c_str(), std::ios::out);
 	M4Record m4, nm4;
 	ExtensionCandidate ec;
-	PartitionResultsWriter<ExtensionCandidate> prw(num_files);
-	for (int i(0); i < num_batches; i += prw.kNumFiles) {
-		const int64_t sfid(i);
-		const int64_t efid(std::min(sfid + prw.kNumFiles, num_batches));
+	PartitionResultsWriter<ExtensionCandidate> prw(max_files_per_batch);
+	for (int i(0); i < num_files; i += prw.kNumFiles) {
+		const int sfid(i);
+		const int efid(std::min(sfid + prw.kNumFiles, num_files));
 		const int nf(efid - sfid);
-		const int64_t L(reads_per_batch * sfid);
-		const int64_t R(efid < num_batches ? reads_per_batch * efid : num_reads);
+		const int64_t L(reads_per_file * sfid);
+		const int64_t R(efid < num_files ? reads_per_file * efid : num_reads);
 		std::ifstream in;
 		open_fstream(in, m4_file_name, std::ios::in);
 		prw.OpenFiles(sfid, efid, m4_file_name, generate_partition_file_name, "partition.done");
@@ -216,12 +216,12 @@ void partition_m4records(const char* const m4_file_name, const double min_cov_ra
 			if (m4qid(m4) >= L && m4qid(m4) < R) {
 				normalize_m4record(m4, false, nm4);
 				m4_to_candidate(nm4, ec);
-				prw.WriteOneResult((m4qid(m4) - L) / reads_per_batch , m4qid(m4), ec);
+				prw.WriteOneResult((m4qid(m4) - L) / reads_per_file, m4qid(m4), ec);
 			}
 			if (m4sid(m4) >= L && m4sid(m4) < R) {
 				normalize_m4record(m4, true, nm4);
 				m4_to_candidate(nm4, ec);
-				prw.WriteOneResult((m4sid(m4) - L) / reads_per_batch , m4sid(m4), ec);
+				prw.WriteOneResult((m4sid(m4) - L) / reads_per_file, m4sid(m4), ec);
 			}
 		}
 		for (int k(0); k < nf; ++k) {

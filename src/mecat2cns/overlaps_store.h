@@ -25,7 +25,7 @@ template <class T> class PartitionResultsWriter {
     public:
 	// can't make kNumFiles static, as sysconf() is run-time only;
 	// leave room for stdin, stdout, stderr, a few others
-	explicit PartitionResultsWriter(const int num_files) : kNumFiles(num_files > 0 ? num_files : sysconf(_SC_OPEN_MAX) - 10), kStoreSize(0), num_open_files(0), results(0), files(0) { }
+	explicit PartitionResultsWriter(const int max_files_per_batch) : kNumFiles(max_files_per_batch > 0 ? max_files_per_batch : sysconf(_SC_OPEN_MAX) - 10), kStoreSize(0), num_open_files(0), results(0), files(0) { }
 	~PartitionResultsWriter() {
 		CloseFiles();
 	}
